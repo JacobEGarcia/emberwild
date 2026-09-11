@@ -1058,9 +1058,13 @@ function netConnect(){
       else setNetStatus(false,'offline realm');
     }});
 }
+const netSeen=new Set();
 function netOnMsg(m){
   let d;try{d=JSON.parse(m.payloadString)}catch(e){return}
   if(!d||d.id===netId)return;
+  const dk=d.id+'|'+(d.ts||'')+'|'+(d.x!==undefined?d.x:'');
+  if(netSeen.has(dk))return;
+  netSeen.add(dk);if(netSeen.size>300)netSeen.delete(netSeen.values().next().value);
   if(m.destinationName===NET_CHAT){
     if(d.t==='chat'&&typeof d.x==='string'){SFX.chat();chatMsg('<b>'+esc(String(d.n||'???').slice(0,14))+':</b> '+esc(d.x.slice(0,120)),'p')}
     return;
@@ -1097,7 +1101,7 @@ function netTick(t){
 }
 function netChat(text){
   if(!mc)return;
-  const msg=new MQTT.Message(JSON.stringify({t:'chat',id:netId,n:player.name,x:text.slice(0,120)}));
+  const msg=new MQTT.Message(JSON.stringify({t:'chat',id:netId,n:player.name,x:text.slice(0,120),ts:Date.now()}));
   msg.destinationName=NET_CHAT;
   try{mc.send(msg)}catch(e){}
 }
