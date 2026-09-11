@@ -1035,13 +1035,14 @@ const NET_BROKERS=[
   {host:'test.mosquitto.org',port:8081,path:'/mqtt'},
 ];
 let brokerIdx=0;
+const MQTT=(typeof Paho!=='undefined')?(Paho.MQTT||Paho):null;
 function netStart(){
-  if(window.__netFailed||typeof Paho==='undefined'){setNetStatus(false,'offline realm');return}
+  if(window.__netFailed||!MQTT){setNetStatus(false,'offline realm');return}
   netConnect();
 }
 function netConnect(){
   const b=NET_BROKERS[brokerIdx%NET_BROKERS.length];brokerIdx++;
-  try{mc=new Paho.MQTT.Client(b.host,b.port,b.path,'ew-'+netId)}
+  try{mc=new MQTT.Client(b.host,b.port,b.path,'ew-'+netId)}
   catch(e){setNetStatus(false,'offline realm');return}
   mc.onConnectionLost=()=>{setNetStatus(false,'realm link lost - reforging');setTimeout(netConnect,5000)};
   mc.onMessageArrived=m=>netOnMsg(m);
@@ -1086,7 +1087,7 @@ function netTick(t){
   if(netOnline&&mc){try{if(!mc.isConnected())return}catch(e){return}
     if(t-netLast>200){
       netLast=t;
-      const msg=new Paho.MQTT.Message(JSON.stringify({t:'s',id:netId,n:player.name,c:player.col,x:Math.round(player.x),y:Math.round(player.y),m:player.moving,a:player.action?player.action.def.name:null}));
+      const msg=new MQTT.Message(JSON.stringify({t:'s',id:netId,n:player.name,c:player.col,x:Math.round(player.x),y:Math.round(player.y),m:player.moving,a:player.action?player.action.def.name:null}));
       msg.destinationName=NET_TOPIC+'/'+netId;
       try{mc.send(msg)}catch(e){}
     }
@@ -1095,7 +1096,7 @@ function netTick(t){
 }
 function netChat(text){
   if(!mc)return;
-  const msg=new Paho.MQTT.Message(JSON.stringify({t:'chat',id:netId,n:player.name,x:text.slice(0,120)}));
+  const msg=new MQTT.Message(JSON.stringify({t:'chat',id:netId,n:player.name,x:text.slice(0,120)}));
   msg.destinationName=NET_CHAT;
   try{mc.send(msg)}catch(e){}
 }
