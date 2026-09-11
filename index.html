@@ -1034,6 +1034,7 @@ const NET_BROKERS=[
   {host:'broker.emqx.io',port:8084,path:'/mqtt'},
   {host:'test.mosquitto.org',port:8081,path:'/mqtt'},
 ];
+const NET_ATTEMPTS=[0,0,0,1,1]; // emqx x3, then mosquitto x2 - keeps the realm on one broker
 let brokerIdx=0;
 const MQTT=(typeof Paho!=='undefined')?(Paho.MQTT||Paho):null;
 function netStart(){
@@ -1041,10 +1042,10 @@ function netStart(){
   netConnect();
 }
 function netConnect(){
-  const b=NET_BROKERS[brokerIdx%NET_BROKERS.length];brokerIdx++;
+  const b=NET_BROKERS[NET_ATTEMPTS[brokerIdx%NET_ATTEMPTS.length]];brokerIdx++;
   try{mc=new MQTT.Client(b.host,b.port,b.path,'ew-'+netId)}
   catch(e){setNetStatus(false,'offline realm');return}
-  mc.onConnectionLost=()=>{setNetStatus(false,'realm link lost - reforging');setTimeout(netConnect,5000)};
+  mc.onConnectionLost=()=>{setNetStatus(false,'realm link lost - reforging');brokerIdx=0;setTimeout(netConnect,5000)};
   mc.onMessageArrived=m=>netOnMsg(m);
   mc.connect({useSSL:true,timeout:10,keepAliveInterval:20,cleanSession:true,
     onSuccess:()=>{
@@ -1053,7 +1054,7 @@ function netConnect(){
       sysMsg('You feel the presence of the realm. Wanderers online can see you.');
     },
     onFailure:()=>{
-      if(brokerIdx<NET_BROKERS.length*2)netConnect();
+      if(brokerIdx<NET_ATTEMPTS.length)netConnect();
       else setNetStatus(false,'offline realm');
     }});
 }
