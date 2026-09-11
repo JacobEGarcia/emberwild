@@ -10,11 +10,14 @@
 <meta property="og:type" content="website">
 <meta name="theme-color" content="#1a1712">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1712'/%3E%3Ccircle cx='16' cy='18' r='7' fill='%23e8a33d'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23f5d78a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#e8e0cf; --ink-dim:#a89e88; --panel:#221d16; --panel-2:#2b2419;
     --edge:#4a3f2c; --accent:#e8a33d; --accent-2:#f5d78a; --good:#8fb56a; --bad:#d4694f;
-    --serif:Georgia,'Iowan Old Style','Times New Roman',serif;
+    --serif:'Alegreya',Georgia,'Iowan Old Style',serif;
     --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -30,18 +33,17 @@
     transition:opacity .8s ease;}
   #title.fade{opacity:0;pointer-events:none}
   #embers{position:absolute;inset:0;pointer-events:none}
-  #title h1{font-size:clamp(3rem,9vw,5.5rem);letter-spacing:.22em;font-weight:400;color:var(--accent-2);
-    text-shadow:0 0 30px rgba(232,163,61,.35), 0 2px 0 #000}
-  #title .sub{color:var(--ink-dim);letter-spacing:.3em;text-transform:uppercase;font-size:clamp(.6rem,1.6vw,.8rem);margin:.9rem 0 2.2rem}
-  #title .card{background:rgba(34,29,22,.85);border:1px solid var(--edge);border-radius:10px;padding:1.4rem 1.6rem;width:min(92vw,380px);
-    box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #title h1{font-size:clamp(3rem,8vw,5rem);letter-spacing:.14em;font-weight:500;color:var(--accent-2)}
+  #title .sub{color:var(--ink-dim);letter-spacing:.24em;text-transform:uppercase;font-size:clamp(.6rem,1.6vw,.8rem);margin:.9rem 0 2.2rem}
+  #title .card{background:rgba(30,25,18,.92);border:1px solid var(--edge);border-radius:10px;padding:1.5rem 1.6rem;width:min(92vw,380px);
+    box-shadow:0 12px 40px rgba(0,0,0,.45)}
   #title label{display:block;font-size:.7rem;letter-spacing:.25em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:.5rem}
   #nameInput{width:100%;background:#171310;border:1px solid var(--edge);border-radius:6px;color:var(--ink);
     font-family:var(--serif);font-size:1.05rem;padding:.65rem .8rem;outline:none;-webkit-user-select:text;user-select:text}
   #nameInput:focus{border-color:var(--accent)}
-  #enterBtn{margin-top:1rem;width:100%;background:linear-gradient(180deg,#3d3323,#2c2417);border:1px solid var(--accent);color:var(--accent-2);
-    font-family:var(--serif);font-size:1rem;letter-spacing:.18em;padding:.75rem;border-radius:6px;cursor:pointer;text-transform:uppercase}
-  #enterBtn:hover{background:linear-gradient(180deg,#4a3d28,#352b1a)}
+  #enterBtn{margin-top:1rem;width:100%;background:var(--accent);border:1px solid transparent;color:#241c0e;
+    font-family:var(--serif);font-weight:700;font-size:1rem;letter-spacing:.18em;padding:.8rem;border-radius:6px;cursor:pointer;text-transform:uppercase}
+  #enterBtn:hover{background:#f0b45c}
   #title .foot{margin-top:1.6rem;font-size:.72rem;color:#6d6350;letter-spacing:.08em;text-align:center;line-height:1.7}
 
   /* ---------- HUD ---------- */
@@ -85,7 +87,7 @@
   .skillRow .top{display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:.25rem}
   .skillRow .lvl{font-family:var(--mono);color:var(--accent-2)}
   .bar{height:7px;background:#171310;border:1px solid #3a3223;border-radius:4px;overflow:hidden}
-  .bar i{display:block;height:100%;background:linear-gradient(90deg,#7a5f2c,var(--accent));width:0%}
+  .bar i{display:block;height:100%;background:var(--accent);width:0%}
 
   /* quests */
   .quest{border:1px solid var(--edge);border-radius:8px;padding:.7rem .8rem;margin-bottom:.7rem;background:var(--panel-2)}
@@ -124,7 +126,7 @@
 
   /* ---------- dialog ---------- */
   #dialog{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);width:min(560px,92vw);z-index:41;
-    background:linear-gradient(180deg,#2b2419,#221d16);border:1px solid var(--edge);border-radius:10px;
+    background:var(--panel);border:1px solid var(--edge);border-radius:10px;
     padding:1rem 1.2rem;box-shadow:0 16px 50px rgba(0,0,0,.6);pointer-events:auto}
   #dialog h3{color:var(--accent-2);font-weight:400;font-size:1rem;margin-bottom:.45rem}
   #dialog .txt{font-size:.88rem;line-height:1.55;color:var(--ink);margin-bottom:.7rem}
