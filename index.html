@@ -217,7 +217,7 @@
 <div id="toasts"></div>
 <div id="hint" class="hidden">click to walk &middot; click trees / rocks / water to work &middot; talk to the folk of Emberwick</div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" onerror="window.__peerFailed=true"></script>
+<script src="https://unpkg.com/paho-mqtt@1.1.0/paho-mqtt-min.js" onerror="window.__netFailed=true"></script>
 <script>
 'use strict';
 /* ============================================================
@@ -1025,70 +1025,52 @@ function drawMinimap(){
   g.strokeRect(cam.x/TILE*sx,cam.y/TILE*sy,VW/TILE*sx,VH/TILE*sy);
 }
 
-// ---------- multiplayer presence (PeerJS public broker, fixed-slot room) ----------
-const peers={};       // pid -> {x,y,tx,ty,dir,name,col,conn,lastSeen,action}
-let netPeer=null,netSlot=-1,netOnline=false;
-const NET_SLOTS=8,NET_PREFIX='emberwild-w1-slot-';
+// ---------- multiplayer presence (public MQTT broker over WSS, no account) ----------
+const peers={};       // id -> {x,y,tx,ty,name,col,moving,action,lastSeen}
+let mc=null,netOnline=false;
+const netId='w'+Math.random().toString(36).slice(2,10);
+const NET_TOPIC='emberwild/w1',NET_CHAT=NET_TOPIC+'/chat';
+const NET_BROKERS=[
+  {host:'broker.emqx.io',port:8084,path:'/mqtt'},
+  {host:'test.mosquitto.org',port:8081,path:'/mqtt'},
+];
+let brokerIdx=0;
 function netStart(){
-  if(window.__peerFailed||typeof Peer==='undefined'){setNetStatus(false,'offline realm');return}
-  trySlot(0);
+  if(window.__netFailed||typeof Paho==='undefined'){setNetStatus(false,'offline realm');return}
+  netConnect();
 }
-function trySlot(n){
-  if(n>=NET_SLOTS){setNetStatus(false,'realm full - you wander alone');return}
-  let p;
-  try{p=new Peer(NET_PREFIX+n,{debug:0})}catch(e){setNetStatus(false,'offline realm');return}
-  let claimed=false;
-  const to=setTimeout(()=>{if(!claimed){try{p.destroy()}catch(e){}trySlot(n+1)}},3500);
-  p.on('open',()=>{
-    claimed=true;clearTimeout(to);
-    netPeer=p;netSlot=n;setNetStatus(true,'realm link open');
-    sysMsg('You feel the presence of the realm. Wanderers online can see you.');
-    p.on('connection',c=>setupConn(c));
-    // dial the other slots
-    for(let i=0;i<NET_SLOTS;i++){
-      if(i===n)continue;
-      try{const c=p.connect(NET_PREFIX+i,{reliable:true});setupConn(c)}catch(e){}
-    }
-    // re-dial occasionally to catch late joiners
-    setInterval(()=>{
-      if(!netPeer)return;
-      for(let i=0;i<NET_SLOTS;i++){
-        if(i===netSlot)continue;
-        const id=NET_PREFIX+i;
-        const existing=Object.values(peers).find(pp=>pp.pid===id);
-        if(!existing){try{setupConn(netPeer.connect(id,{reliable:true}))}catch(e){}}
-      }
-    },20000);
-  });
-  p.on('error',e=>{
-    clearTimeout(to);
-    if(e&&e.type==='unavailable-id'&&!claimed){try{p.destroy()}catch(e){}trySlot(n+1)}
-    else if(!claimed){try{p.destroy()}catch(e){}setNetStatus(false,'offline realm')}
-  });
-  p.on('disconnected',()=>{try{p.reconnect()}catch(e){}});
+function netConnect(){
+  const b=NET_BROKERS[brokerIdx%NET_BROKERS.length];brokerIdx++;
+  try{mc=new Paho.MQTT.Client(b.host,b.port,b.path,'ew-'+netId)}
+  catch(e){setNetStatus(false,'offline realm');return}
+  mc.onConnectionLost=()=>{setNetStatus(false,'realm link lost - reforging');setTimeout(netConnect,5000)};
+  mc.onMessageArrived=m=>netOnMsg(m);
+  mc.connect({useSSL:true,timeout:10,keepAliveInterval:20,cleanSession:true,
+    onSuccess:()=>{
+      setNetStatus(true,'realm link open');
+      try{mc.subscribe(NET_TOPIC+'/+',{qos:0});mc.subscribe(NET_CHAT,{qos:0})}catch(e){}
+      sysMsg('You feel the presence of the realm. Wanderers online can see you.');
+    },
+    onFailure:()=>{
+      if(brokerIdx<NET_BROKERS.length*2)netConnect();
+      else setNetStatus(false,'offline realm');
+    }});
 }
-function setupConn(c){
-  c.on('open',()=>{
-    c.send({t:'hi',name:player.name,col:player.col,x:player.x,y:player.y});
-  });
-  c.on('data',m=>{
-    if(!m||!m.t)return;
-    const pid=c.peer;
-    if(m.t==='hi'){
-      if(!peers[pid]){peers[pid]={pid,x:m.x,y:m.y,tx:m.x,ty:m.y,name:m.name||'wanderer',col:m.col||'#9fc2e8',conn:c,lastSeen:performance.now(),moving:false};updateNetCount()}
-      else{peers[pid].conn=c;peers[pid].name=m.name;peers[pid].col=m.col;peers[pid].lastSeen=performance.now()}
-      if(c.open)c.send({t:'hi',name:player.name,col:player.col,x:player.x,y:player.y});
-    }else if(m.t==='s'&&peers[pid]){
-      const p=peers[pid];p.tx=m.x;p.ty=m.y;p.moving=!!m.m;p.action=m.a||null;p.lastSeen=performance.now();
-    }else if(m.t==='chat'){
-      SFX.chat();
-      chatMsg('<b>'+esc(m.n||'???')+':</b> '+esc(m.x),'p');
-    }else if(m.t==='bye'&&peers[pid]){
-      delete peers[pid];updateNetCount();
-    }
-  });
-  c.on('close',()=>{if(peers[c.peer]&&peers[c.peer].conn===c){delete peers[c.peer];updateNetCount()}});
-  c.on('error',()=>{});
+function netOnMsg(m){
+  let d;try{d=JSON.parse(m.payloadString)}catch(e){return}
+  if(!d||d.id===netId)return;
+  if(m.destinationName===NET_CHAT){
+    if(d.t==='chat'&&typeof d.x==='string'){SFX.chat();chatMsg('<b>'+esc(String(d.n||'???').slice(0,14))+':</b> '+esc(d.x.slice(0,120)),'p')}
+    return;
+  }
+  if(d.t==='s'&&typeof d.x==='number'&&typeof d.y==='number'){
+    let p=peers[d.id];
+    if(!p){p=peers[d.id]={x:d.x,y:d.y,tx:d.x,ty:d.y,name:'wanderer',col:'#9fc2e8',moving:false,lastSeen:0};updateNetCount()}
+    p.tx=clamp(d.x,0,TW*TILE);p.ty=clamp(d.y,0,TH*TILE);
+    p.moving=!!d.m;p.action=d.a||null;
+    p.name=String(d.n||'wanderer').slice(0,14);p.col=String(d.c||'#9fc2e8').slice(0,30);
+    p.lastSeen=performance.now();
+  }
 }
 function setNetStatus(on,label){
   netOnline=on;
@@ -1101,21 +1083,23 @@ function updateNetCount(){
 }
 let netLast=0;
 function netTick(t){
-  if(!netOnline||!netPeer)return;
-  if(t-netLast>120){
-    netLast=t;
-    const msg={t:'s',x:Math.round(player.x),y:Math.round(player.y),m:player.moving,a:player.action?player.action.def.name:null};
-    for(const id in peers){const p=peers[id];try{if(p.conn&&p.conn.open)p.conn.send(msg)}catch(e){}}
+  if(netOnline&&mc){try{if(!mc.isConnected())return}catch(e){return}
+    if(t-netLast>200){
+      netLast=t;
+      const msg=new Paho.MQTT.Message(JSON.stringify({t:'s',id:netId,n:player.name,c:player.col,x:Math.round(player.x),y:Math.round(player.y),m:player.moving,a:player.action?player.action.def.name:null}));
+      msg.destinationName=NET_TOPIC+'/'+netId;
+      try{mc.send(msg)}catch(e){}
+    }
   }
-  // prune silent peers
   for(const id in peers)if(t-peers[id].lastSeen>15000){delete peers[id];updateNetCount()}
 }
 function netChat(text){
-  for(const id in peers){const p=peers[id];try{if(p.conn&&p.conn.open)p.conn.send({t:'chat',n:player.name,x:text})}catch(e){}}
+  if(!mc)return;
+  const msg=new Paho.MQTT.Message(JSON.stringify({t:'chat',id:netId,n:player.name,x:text.slice(0,120)}));
+  msg.destinationName=NET_CHAT;
+  try{mc.send(msg)}catch(e){}
 }
-function netBye(){
-  for(const id in peers){const p=peers[id];try{if(p.conn&&p.conn.open)p.conn.send({t:'bye'})}catch(e){}}
-}
+function netBye(){for(const id in peers)delete peers[id]}
 function drawPeers(g,t){
   for(const id in peers){
     const p=peers[id];
