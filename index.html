@@ -591,12 +591,12 @@ function tickAction(dt){
   const ox=(a.idx%TW)*TILE+TILE/2,oy=Math.floor(a.idx/TW)*TILE+TILE/2;
   if(dist(player.x,player.y,ox,oy)>TILE*2.1){stopAction();return}
   a.timer+=dt*ITEMS[a.toolId].speed;
-  if(a.timer>=1400){
+  if(a.timer>=1100){
     a.timer=0;
     SFX[a.def.sfx]();
     const sk=kindSkillName(a.def.tool);
     const lvl=player.skillLvl(sk);
-    const chance=Math.min(0.85,0.45+lvl*0.012);
+    const chance=Math.min(0.9,0.68+lvl*0.012);
     if(Math.random()<chance){
       let item=a.def.item,xp=a.def.xp;
       if(o.t===OBJ_FISH){const f=fishFor(lvl);item=f.item;xp=f.xp}
@@ -609,7 +609,7 @@ function tickAction(dt){
         sysMsg('Your bag is full.');SFX.err();stopAction();return;
       }
     }
-    if(Math.random()<0.35){ // deplete
+    if(Math.random()<0.18){ // deplete
       o.hp=0;o.respawnAt=performance.now()+a.def.respawn;
       if(o.t===OBJ_FISH)sysMsg('The fish move on.');
       stopAction();
@@ -979,7 +979,7 @@ function drawPlayerSelf(g,t){
   drawHumanoid(g,x,y+bob,player.col,true,player.name);
   // action progress
   if(player.action){
-    const a=player.action,pct=clamp(a.timer/1400,0,1);
+    const a=player.action,pct=clamp(a.timer/1100,0,1);
     g.fillStyle='rgba(0,0,0,.5)';g.fillRect(x-14,y-46,28,5);
     g.fillStyle='#e8a33d';g.fillRect(x-14,y-46,28*pct,5);
     // swing anim
