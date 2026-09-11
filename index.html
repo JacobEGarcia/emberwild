@@ -244,6 +244,7 @@ function makeNoise(seed){
     return lerp(lerp(at(xi,yi),at(xi+1,yi),u),lerp(at(xi,yi+1),at(xi+1,yi+1),u),v);
   };
 }
+const makeNoise0=makeNoise(5150);
 function fbm(noise,x,y,oct){let a=0,amp=.5,f=1;for(let i=0;i<oct;i++){a+=noise(x*f,y*f)*amp;amp*=.5;f*=2}return a}
 
 // ---------- XP (classic curve, scaled) ----------
@@ -624,7 +625,7 @@ function checkQuestProgress(){
   }
   refreshPanel();
 }
-function questReady(n){return player.quests[n.quest.id]==='active'&&countItem(n.quest.need.item)>=n.quest.need.qty}
+function questReady(n){return !!n.quest&&player.quests[n.quest.id]==='active'&&countItem(n.quest.need.item)>=n.quest.need.qty}
 function completeQuest(n){
   const q=n.quest;
   removeItem(q.need.item,q.need.qty);
@@ -848,14 +849,14 @@ let dayT=0.32; // 0..1 day cycle
 const DAY_LEN=300000; // 5 min cycle
 
 function tileColor(t,x,y){
-  const v=((x*7+y*13)%5-2)*4;
+  const v=((x*7+y*13)%5-2)*2+((makeNoise0(x*0.11,y*0.11)-0.5)*14)|0;
   switch(t){
     case T.GRASS:return 'rgb('+(74+v)+','+(103+v)+','+(65+v)+')';
     case T.WATER:return 'rgb('+(34+v)+','+(69+v)+','+(79+v)+')';
     case T.PATH:return 'rgb('+(138+v)+','+(111+v)+','+(77+v)+')';
     case T.STONE:return 'rgb('+(95+v)+','+(102+v)+','+(110+v)+')';
     case T.SAND:return 'rgb('+(168+v)+','+(152+v)+','+(110+v)+')';
-    case T.FLOOR:return 'rgb('+(107+v)+','+(111+v)+','+(114+v)+')';
+    case T.FLOOR:return 'rgb('+(118+v)+','+(108+v)+','+(88+v)+')';
     default:return '#4a6741';
   }
 }
