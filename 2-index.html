@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EMBERWILD - a little realm in your browser</title>
+<meta name="description" content="Emberwild - a RuneScape-inspired MMO-lite that runs entirely in your browser. Chop, mine, fish, quest, and share the realm with other players. No install, no account.">
+<meta property="og:title" content="EMBERWILD">
+<meta property="og:description" content="A little realm in your browser. Chop, mine, fish, quest - with whoever else wanders in.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#1a1712">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1712'/%3E%3Ccircle cx='16' cy='18' r='7' fill='%23e8a33d'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23f5d78a'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --ink:#e8e0cf; --ink-dim:#a89e88; --panel:#221d16; --panel-2:#2b2419;
+    --edge:#4a3f2c; --accent:#e8a33d; --accent-2:#f5d78a; --good:#8fb56a; --bad:#d4694f;
+    --serif:Georgia,'Iowan Old Style','Times New Roman',serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#141210}
+  body{font-family:var(--serif);color:var(--ink);-webkit-user-select:none;user-select:none;
+       touch-action:none;overscroll-behavior:none}
+  #game{position:fixed;inset:0;display:block;cursor:crosshair}
+  .hidden{display:none!important}
+
+  /* ---------- title screen ---------- */
+  #title{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(120% 90% at 50% 10%, #2e2a1e 0%, #1c1813 45%, #100e0b 100%);
+    transition:opacity .8s ease;}
+  #title.fade{opacity:0;pointer-events:none}
+  #embers{position:absolute;inset:0;pointer-events:none}
+  #title h1{font-size:clamp(3rem,9vw,5.5rem);letter-spacing:.22em;font-weight:400;color:var(--accent-2);
+    text-shadow:0 0 30px rgba(232,163,61,.35), 0 2px 0 #000}
+  #title .sub{color:var(--ink-dim);letter-spacing:.3em;text-transform:uppercase;font-size:clamp(.6rem,1.6vw,.8rem);margin:.9rem 0 2.2rem}
+  #title .card{background:rgba(34,29,22,.85);border:1px solid var(--edge);border-radius:10px;padding:1.4rem 1.6rem;width:min(92vw,380px);
+    box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  #title label{display:block;font-size:.7rem;letter-spacing:.25em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:.5rem}
+  #nameInput{width:100%;background:#171310;border:1px solid var(--edge);border-radius:6px;color:var(--ink);
+    font-family:var(--serif);font-size:1.05rem;padding:.65rem .8rem;outline:none;-webkit-user-select:text;user-select:text}
+  #nameInput:focus{border-color:var(--accent)}
+  #enterBtn{margin-top:1rem;width:100%;background:linear-gradient(180deg,#3d3323,#2c2417);border:1px solid var(--accent);color:var(--accent-2);
+    font-family:var(--serif);font-size:1rem;letter-spacing:.18em;padding:.75rem;border-radius:6px;cursor:pointer;text-transform:uppercase}
+  #enterBtn:hover{background:linear-gradient(180deg,#4a3d28,#352b1a)}
+  #title .foot{margin-top:1.6rem;font-size:.72rem;color:#6d6350;letter-spacing:.08em;text-align:center;line-height:1.7}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:20}
+  .hud-corner{position:absolute;display:flex;gap:.5rem;align-items:flex-start}
+  #topRight{top:.7rem;right:.7rem;flex-direction:column;align-items:flex-end}
+  .chip{background:rgba(24,20,15,.82);border:1px solid var(--edge);border-radius:6px;padding:.35rem .6rem;
+    font-family:var(--mono);font-size:.78rem;color:var(--ink);display:flex;gap:.45rem;align-items:center}
+  .chip .k{color:var(--ink-dim);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase}
+  #netDot{width:7px;height:7px;border-radius:50%;background:#6d6350}
+  #netDot.on{background:var(--good);box-shadow:0 0 6px var(--good)}
+  #minimap{background:rgba(24,20,15,.82);border:1px solid var(--edge);border-radius:6px;image-rendering:pixelated}
+
+  /* ---------- side panel ---------- */
+  #panel{position:absolute;top:0;right:0;height:100%;width:330px;max-width:92vw;background:var(--panel);
+    border-left:1px solid var(--edge);display:flex;flex-direction:column;transform:translateX(100%);
+    transition:transform .25s ease;pointer-events:auto}
+  #panel.open{transform:translateX(0)}
+  #tabs{display:flex;border-bottom:1px solid var(--edge)}
+  #tabs button{flex:1;background:none;border:none;border-right:1px solid var(--edge);color:var(--ink-dim);
+    font-family:var(--serif);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;padding:.7rem .2rem;cursor:pointer}
+  #tabs button:last-child{border-right:none}
+  #tabs button.active{color:var(--accent-2);background:var(--panel-2)}
+  #tabBody{flex:1;overflow-y:auto;padding:.8rem;-webkit-user-select:none}
+  #panelToggle{position:absolute;top:50%;left:-34px;transform:translateY(-50%);width:34px;height:64px;
+    background:var(--panel);border:1px solid var(--edge);border-right:none;border-radius:8px 0 0 8px;
+    color:var(--ink-dim);cursor:pointer;font-size:1rem;pointer-events:auto}
+
+  /* inventory */
+  #invGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .slot{aspect-ratio:1;background:#171310;border:1px solid #3a3223;border-radius:6px;position:relative;
+    display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .slot:hover{border-color:var(--accent)}
+  .slot .qty{position:absolute;right:3px;bottom:2px;font-family:var(--mono);font-size:.62rem;color:var(--accent-2)}
+  .slot .nm{position:absolute;left:0;right:0;top:100%;font-size:.6rem;color:var(--ink-dim);text-align:center;display:none;z-index:5}
+  .slot:hover .nm{display:block}
+  .slot canvas{width:70%;height:70%}
+
+  /* skills */
+  .skillRow{margin-bottom:.7rem}
+  .skillRow .top{display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:.25rem}
+  .skillRow .lvl{font-family:var(--mono);color:var(--accent-2)}
+  .bar{height:7px;background:#171310;border:1px solid #3a3223;border-radius:4px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#7a5f2c,var(--accent));width:0%}
+
+  /* quests */
+  .quest{border:1px solid var(--edge);border-radius:8px;padding:.7rem .8rem;margin-bottom:.7rem;background:var(--panel-2)}
+  .quest h3{font-size:.92rem;color:var(--accent-2);font-weight:400}
+  .quest .who{font-size:.68rem;color:var(--ink-dim);letter-spacing:.1em;text-transform:uppercase;margin:.15rem 0 .4rem}
+  .quest p{font-size:.8rem;line-height:1.5;color:var(--ink)}
+  .quest .prog{font-family:var(--mono);font-size:.7rem;color:var(--good);margin-top:.4rem}
+  .quest.done{opacity:.55}.quest.done .prog{color:var(--accent-2)}
+
+  /* settings */
+  .setRow{display:flex;justify-content:space-between;align-items:center;padding:.55rem 0;border-bottom:1px solid #332b1e;font-size:.85rem}
+  .setRow button{background:#171310;border:1px solid var(--edge);color:var(--ink);border-radius:5px;padding:.3rem .7rem;cursor:pointer;font-family:var(--mono);font-size:.75rem}
+  .setRow button:hover{border-color:var(--accent)}
+
+  /* ---------- chat ---------- */
+  #chatBox{position:absolute;left:.7rem;bottom:.7rem;width:min(430px,72vw);pointer-events:auto;display:flex;flex-direction:column;gap:.35rem}
+  #chatLog{background:rgba(20,17,13,.78);border:1px solid var(--edge);border-radius:8px;padding:.5rem .65rem;
+    max-height:172px;overflow-y:auto;font-size:.82rem;line-height:1.45}
+  #chatLog .sys{color:var(--ink-dim);font-style:italic}
+  #chatLog .lvl{color:var(--accent-2)}
+  #chatLog .p{color:var(--ink)} #chatLog .p b{color:#9fc2e8;font-weight:400}
+  #chatLog .me b{color:var(--accent-2)}
+  #chatForm{display:flex;gap:.4rem}
+  #chatInput{flex:1;background:rgba(23,19,16,.9);border:1px solid var(--edge);border-radius:6px;color:var(--ink);
+    font-family:var(--serif);font-size:.85rem;padding:.45rem .6rem;outline:none;-webkit-user-select:text;user-select:text}
+  #chatInput:focus{border-color:var(--accent)}
+  #chatForm button{background:var(--panel-2);border:1px solid var(--edge);color:var(--accent-2);border-radius:6px;padding:0 .8rem;cursor:pointer}
+
+  /* ---------- context menu ---------- */
+  #ctxMenu{position:fixed;z-index:40;background:var(--panel);border:1px solid var(--edge);border-radius:8px;
+    min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;pointer-events:auto}
+  #ctxMenu .opt{padding:.5rem .8rem;font-size:.85rem;cursor:pointer}
+  #ctxMenu .opt:hover{background:var(--panel-2)}
+  #ctxMenu .opt b{color:var(--accent-2);font-weight:400}
+  #ctxMenu .head{padding:.45rem .8rem;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-dim);border-bottom:1px solid var(--edge)}
+
+  /* ---------- dialog ---------- */
+  #dialog{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);width:min(560px,92vw);z-index:41;
+    background:linear-gradient(180deg,#2b2419,#221d16);border:1px solid var(--edge);border-radius:10px;
+    padding:1rem 1.2rem;box-shadow:0 16px 50px rgba(0,0,0,.6);pointer-events:auto}
+  #dialog h3{color:var(--accent-2);font-weight:400;font-size:1rem;margin-bottom:.45rem}
+  #dialog .txt{font-size:.88rem;line-height:1.55;color:var(--ink);margin-bottom:.7rem}
+  #dialog .opts button{display:block;width:100%;text-align:left;background:none;border:none;color:#9fc2e8;
+    font-family:var(--serif);font-size:.86rem;padding:.35rem 0;cursor:pointer}
+  #dialog .opts button:hover{color:var(--accent-2)}
+
+  /* ---------- shop ---------- */
+  #shop{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(600px,94vw);max-height:80vh;z-index:42;
+    background:var(--panel);border:1px solid var(--edge);border-radius:10px;display:flex;flex-direction:column;
+    box-shadow:0 20px 60px rgba(0,0,0,.65);pointer-events:auto}
+  #shop header{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--edge)}
+  #shop header h3{font-weight:400;color:var(--accent-2)}
+  #shop header button{background:none;border:none;color:var(--ink-dim);font-size:1.1rem;cursor:pointer}
+  #shop .cols{display:flex;flex:1;min-height:0}
+  #shop .col{flex:1;padding:.8rem;overflow-y:auto}
+  #shop .col h4{font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:.6rem}
+  #shop .col:first-child{border-right:1px solid var(--edge)}
+  .shopRow{display:flex;align-items:center;gap:.55rem;padding:.4rem .3rem;border-radius:6px;cursor:pointer}
+  .shopRow:hover{background:var(--panel-2)}
+  .shopRow .info{flex:1}.shopRow .info .n{font-size:.82rem}.shopRow .info .p{font-family:var(--mono);font-size:.68rem;color:var(--accent)}
+  .shopRow canvas{width:30px;height:30px}
+  .shopRow.dis{opacity:.4;cursor:default}
+
+  #toasts{position:fixed;left:50%;top:16%;transform:translateX(-50%);z-index:50;pointer-events:none;text-align:center}
+  .toast{background:rgba(24,20,15,.9);border:1px solid var(--accent);color:var(--accent-2);border-radius:8px;
+    padding:.5rem 1.1rem;margin-bottom:.4rem;font-size:.9rem;animation:toastIn .3s ease}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+  #hint{position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);color:var(--ink-dim);font-size:.72rem;
+    letter-spacing:.06em;pointer-events:none;text-align:center;opacity:.85}
+
+  @media (max-width:760px){
+    #panel{width:100%;top:auto;bottom:0;height:46%;border-left:none;border-top:1px solid var(--edge);
+      transform:translateY(100%)}
+    #panel.open{transform:translateY(0)}
+    #panelToggle{top:-34px;left:50%;transform:translateX(-50%);width:64px;height:30px;border-radius:8px 8px 0 0;border:1px solid var(--edge);border-bottom:none}
+    #chatBox{width:calc(100vw - 1.4rem)}
+    #chatLog{max-height:104px}
+    #minimap{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="title">
+  <canvas id="embers"></canvas>
+  <h1>EMBERWILD</h1>
+  <div class="sub">a little realm in your browser</div>
+  <div class="card">
+    <label for="nameInput">What do they call you?</label>
+    <input id="nameInput" maxlength="14" placeholder="wanderer" autocomplete="off" spellcheck="false">
+    <button id="enterBtn">Enter the Wild</button>
+  </div>
+  <div class="foot">chop &middot; mine &middot; fish &middot; quest &middot; whoever is online wanders beside you<br>no account &middot; no install &middot; progress saves on this device</div>
+</div>
+
+<div id="hud" class="hidden">
+  <div class="hud-corner" id="topRight">
+    <canvas id="minimap" width="148" height="112"></canvas>
+    <div class="chip"><span id="netDot"></span><span id="netLabel">offline realm</span></div>
+    <div class="chip"><span class="k">coins</span><span id="coinsVal">0</span></div>
+  </div>
+  <div id="chatBox">
+    <div id="chatLog"></div>
+    <form id="chatForm"><input id="chatInput" maxlength="120" placeholder="say something... (Enter)" autocomplete="off"><button type="submit">&#10148;</button></form>
+  </div>
+  <div id="panel">
+    <button id="panelToggle">&#9776;</button>
+    <div id="tabs">
+      <button data-tab="inv" class="active">Bag</button>
+      <button data-tab="skills">Skills</button>
+      <button data-tab="quests">Quests</button>
+      <button data-tab="set">More</button>
+    </div>
+    <div id="tabBody"></div>
+  </div>
+</div>
+
+<div id="ctxMenu" class="hidden"></div>
+<div id="dialog" class="hidden"><h3 id="dlgName"></h3><div class="txt" id="dlgTxt"></div><div class="opts" id="dlgOpts"></div></div>
+<div id="shop" class="hidden">
+  <header><h3 id="shopName">General Store</h3><button id="shopClose">&times;</button></header>
+  <div class="cols">
+    <div class="col"><h4>They sell</h4><div id="shopStock"></div></div>
+    <div class="col"><h4>Your bag (click to sell)</h4><div id="shopMine"></div></div>
+  </div>
+</div>
+<div id="toasts"></div>
+<div id="hint" class="hidden">click to walk &middot; click trees / rocks / water to work &middot; talk to the folk of Emberwick</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" onerror="window.__peerFailed=true"></script>
+<script>
+'use strict';
+/* ============================================================
+   EMBERWILD - a RuneScape-inspired MMO-lite, one file, no assets
+   ============================================================ */
+
+// ---------- utils ----------
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const dist=(ax,ay,bx,by)=>Math.hypot(ax-bx,ay-by);
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function el(id){return document.getElementById(id)}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+// value noise, seeded
+function makeNoise(seed){
+  const r=mulberry32(seed),g=new Float32Array(256);
+  for(let i=0;i<256;i++)g[i]=r();
+  const at=(x,y)=>g[((x*73+y*149)%256+256)%256];
+  return (x,y)=>{
+    const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+    return lerp(lerp(at(xi,yi),at(xi+1,yi),u),lerp(at(xi,yi+1),at(xi+1,yi+1),u),v);
+  };
+}
+function fbm(noise,x,y,oct){let a=0,amp=.5,f=1;for(let i=0;i<oct;i++){a+=noise(x*f,y*f)*amp;amp*=.5;f*=2}return a}
+
+// ---------- XP (classic curve, scaled) ----------
+const XP_MAX_LEVEL=99;
+const xpTable=[0];
+(function(){let pts=0;for(let l=1;l<XP_MAX_LEVEL;l++){pts+=Math.floor(l-1+300*Math.pow(2,(l-1)/7));xpTable[l]=Math.floor(pts/4)}})();
+function levelForXp(xp){let l=1;while(l<XP_MAX_LEVEL&&xp>=xpTable[l])l++;return l}
+
+// ---------- items ----------
+const ITEMS={
+  logs:      {name:'Logs',        sell:4,   col:'#8a6f4d', kind:'wood'},
+  oak_logs:  {name:'Oak logs',    sell:12,  col:'#6d5638', kind:'wood'},
+  willow_logs:{name:'Willow logs',sell:30,  col:'#7a8a5a', kind:'wood'},
+  copper_ore:{name:'Copper ore',  sell:6,   col:'#b87333', kind:'ore'},
+  iron_ore:  {name:'Iron ore',    sell:18,  col:'#a8a29e', kind:'ore'},
+  gold_ore:  {name:'Gold ore',    sell:55,  col:'#d4af37', kind:'ore'},
+  shrimp:    {name:'Raw shrimp',  sell:5,   col:'#e89a8a', kind:'fish'},
+  trout:     {name:'Raw trout',   sell:16,  col:'#8ab8c8', kind:'fish'},
+  bass:      {name:'Raw bass',    sell:40,  col:'#7a9a6a', kind:'fish'},
+  bronze_axe:{name:'Bronze axe',  sell:0,tool:'axe',speed:1,   lvl:1, col:'#b87333',kind:'tool'},
+  iron_axe:  {name:'Iron axe',    sell:0,tool:'axe',speed:1.3, lvl:6, col:'#c8c8c8',kind:'tool'},
+  steel_axe:  {name:'Steel axe',  sell:0,tool:'axe',speed:1.6, lvl:21,col:'#8ab8e8',kind:'tool'},
+  bronze_pick:{name:'Bronze pick',sell:0,tool:'pick',speed:1,  lvl:1, col:'#b87333',kind:'tool'},
+  iron_pick: {name:'Iron pick',   sell:0,tool:'pick',speed:1.3,lvl:6, col:'#c8c8c8',kind:'tool'},
+  steel_pick: {name:'Steel pick', sell:0,tool:'pick',speed:1.6,lvl:21,col:'#8ab8e8',kind:'tool'},
+  wood_rod:  {name:'Fishing rod', sell:0,tool:'rod',speed:1,   lvl:1, col:'#8a6f4d',kind:'tool'},
+  fly_rod:   {name:'Fly rod',     sell:0,tool:'rod',speed:1.3, lvl:6, col:'#c8a85a',kind:'tool'},
+  bone_rod:  {name:'Bone rod',    sell:0,tool:'rod',speed:1.6, lvl:21,col:'#e8e0cf',kind:'tool'},
+};
+const SHOP_STOCK=[
+  {id:'iron_axe',price:90},{id:'steel_axe',price:320},
+  {id:'iron_pick',price:90},{id:'steel_pick',price:320},
+  {id:'fly_rod',price:75},{id:'bone_rod',price:300},
+];
+
+// ---------- world gen ----------
+const TW=128,TH=96,TILE=36; // tiles, tile px
+const T={GRASS:0,WATER:1,PATH:2,STONE:3,SAND:4,FLOOR:5,DARK:6};
+const terrain=new Uint8Array(TW*TH);
+const OBJ_NONE=0,OBJ_TREE=1,OBJ_OAK=2,OBJ_WILLOW=3,OBJ_COPPER=4,OBJ_IRON=5,OBJ_GOLD=6,OBJ_FISH=7,OBJ_BUILD=8;
+// objects: sparse map keyed by idx
+const objects=new Map(); // idx -> {t, hp, respawnAt, spot}
+const solid=(x,y)=>{
+  if(x<0||y<0||x>=TW||y>=TH)return true;
+  const t=terrain[y*TW+x];
+  if(t===T.WATER)return true;
+  const o=objects.get(y*TW+x);
+  if(o&&(o.t===OBJ_BUILD))return true;
+  if(o&&o.hp>0&&(o.t===OBJ_TREE||o.t===OBJ_OAK||o.t===OBJ_WILLOW||o.t===OBJ_COPPER||o.t===OBJ_IRON||o.t===OBJ_GOLD))return true;
+  return false;
+};
+const TOWN={x:54,y:42,r:13};       // Emberwick
+const MINE={x:104,y:16,r:10};
+const LAKE={x:30,y:74,r:11};
+
+function npcTile(x,y){
+  const P=[[TOWN.x-5,TOWN.y-1],[MINE.x-6,MINE.y+6],[LAKE.x+13,LAKE.y-4],[TOWN.x+6,TOWN.y-4],[TOWN.x,TOWN.y]];
+  return P.some(p=>p[0]===x&&p[1]===y);
+}
+function genWorld(){
+  const n1=makeNoise(1337),n2=makeNoise(7211);
+  for(let y=0;y<TH;y++)for(let x=0;x<TW;x++){
+    const i=y*TW+x;
+    let t=T.GRASS;
+    const w=fbm(n1,x/22,y/22,3);
+    if(w>0.62)t=T.WATER;
+    else if(w>0.575)t=T.SAND;
+    // clear town
+    if(dist(x,y,TOWN.x,TOWN.y)<TOWN.r)t=(dist(x,y,TOWN.x,TOWN.y)<TOWN.r-5)?T.FLOOR:T.GRASS;
+    // mine: rocky plateau
+    if(dist(x,y,MINE.x,MINE.y)<MINE.r)t=T.STONE;
+    // lake guaranteed
+    if(dist(x,y,LAKE.x,LAKE.y)<LAKE.r)t=T.WATER;
+    else if(dist(x,y,LAKE.x,LAKE.y)<LAKE.r+1.5)t=T.SAND;
+    terrain[i]=t;
+  }
+  // paths: town to mine, town to lake, town south exit
+  carvePath(TOWN.x,TOWN.y,MINE.x-4,MINE.y+4);
+  carvePath(TOWN.x,TOWN.y,LAKE.x+8,LAKE.y-6);
+  carvePath(TOWN.x,TOWN.y,TOWN.x,TH-6);
+  // scatter objects
+  const r=mulberry32(4242);
+  for(let y=2;y<TH-2;y++)for(let x=2;x<TW-2;x++){
+    const i=y*TW+x,t=terrain[i];
+    if(t===T.GRASS){
+      const dT=dist(x,y,TOWN.x,TOWN.y),dL=dist(x,y,LAKE.x,LAKE.y),dM=dist(x,y,MINE.x,MINE.y);
+      if(dT<TOWN.r+2||dL<LAKE.r+3||dM<MINE.r+2)continue;
+      const density=fbm(n2,x/14,y/14,2);
+      if(density>0.58){
+        const roll=r();
+        let ot=OBJ_TREE;
+        if(density>0.72&&roll<0.22)ot=OBJ_OAK;
+        else if(density>0.68&&roll<0.10)ot=OBJ_WILLOW;
+        objects.set(i,{t:ot,hp:1,respawnAt:0});
+      }
+    }else if(t===T.STONE&&r()<0.30&&!npcTile(x,y)){
+      const roll=r();
+      objects.set(i,{t:roll<0.5?OBJ_COPPER:roll<0.85?OBJ_IRON:OBJ_GOLD,hp:1,respawnAt:0});
+    }
+  }
+  // fishing spots: sand/grass tiles adjacent to lake water
+  for(let y=1;y<TH-1;y++)for(let x=1;x<TW-1;x++){
+    const i=y*TW+x;
+    if(terrain[i]!==T.SAND&&terrain[i]!==T.GRASS)continue;
+    if(dist(x,y,LAKE.x,LAKE.y)>LAKE.r+3)continue;
+    let nearWater=false;
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]])if(terrain[(y+dy)*TW+x+dx]===T.WATER)nearWater=true;
+    if(nearWater&&r()<0.5&&!npcTile(x,y))objects.set(i,{t:OBJ_FISH,hp:1,respawnAt:0,spot:true});
+  }
+  // town buildings (solid rectangles with roofs drawn at render)
+  const B=[[TOWN.x-8,TOWN.y-6,4,3],[TOWN.x+4,TOWN.y-7,5,3],[TOWN.x-9,TOWN.y+3,3,3],[TOWN.x+5,TOWN.y+3,4,3],[TOWN.x-2,TOWN.y-9,4,3]];
+  for(const[bx,by,bw,bh]of B)for(let y=by;y<by+bh;y++)for(let x=bx;x<bx+bw;x++)
+    objects.set(y*TW+x,{t:OBJ_BUILD,hp:1,bx,by,bw,bh});
+}
+function carvePath(x0,y0,x1,y1){
+  let x=x0,y=y0,guard=0;
+  while((x!==x1||y!==y1)&&guard++<600){
+    const i=y*TW+x;
+    if(terrain[i]!==T.WATER&&terrain[i]!==T.FLOOR&&terrain[i]!==T.STONE)terrain[i]=T.PATH;
+    if(terrain[i]===T.WATER)terrain[i]=T.PATH; // bridge
+    objects.delete(i);
+    if(Math.abs(x1-x)>Math.abs(y1-y))x+=Math.sign(x1-x);else y+=Math.sign(y1-y);
+    if(Math.random()<0.35){if(Math.abs(x1-x)>0)x+=Math.sign(x1-x);else if(Math.abs(y1-y)>0)y+=Math.sign(y1-y);}
+  }
+}
+genWorld();
+
+// ---------- NPCs ----------
+const NPCS=[
+  {id:'maera',name:'Maera the Woodcutter',x:TOWN.x-5,y:TOWN.y-1,col:'#c87a4a',
+   quest:{id:'q_logs',title:'Clearing the Path',
+     offer:'The south road keeps choking on fallen timber. Bring me 10 logs and I will make it worth your while.',
+     need:{item:'logs',qty:10},reward:{coins:150,xp:{skill:'wc',amt:150}},
+     thanks:'Good, honest timber. The road crews will sing your name. Spend this well.'}},
+  {id:'doran',name:'Old Doran',x:MINE.x-6,y:MINE.y+6,col:'#8a8f9a',
+   quest:{id:'q_ore',title:'Ore for the Forge',
+     offer:'My forge is cold and my racks are empty. 8 copper ore from the plateau, and I will pay a fair weight.',
+     need:{item:'copper_ore',qty:8},reward:{coins:220,xp:{skill:'mine',amt:200}},
+     thanks:'Ha! Real copper. You swing a pick like you mean it, stranger.'}},
+  {id:'brinn',name:'Fisher Brinn',x:LAKE.x+13,y:LAKE.y-4,col:'#5a8aa8',
+   quest:{id:'q_fish',title:"The Angler's Bet",
+     offer:'A wager: you cannot land 5 trout before the week is out. Prove me wrong and the pot is yours.',
+     need:{item:'trout',qty:5},reward:{coins:300,xp:{skill:'fish',amt:250}},
+     thanks:'Five! Fat ones, no less. A bet is a bet - take the pot, angler.'}},
+  {id:'rennick',name:"Rennick's General Store",x:TOWN.x+6,y:TOWN.y-4,col:'#c8a85a',shop:true},
+];
+
+// ---------- player state ----------
+const SAVE_KEY='emberwild-save-v1';
+const player={
+  name:'wanderer', x:TOWN.x*TILE+TILE/2, y:TOWN.y*TILE+TILE/2, dir:1, moving:false,
+  path:[], action:null, // {type:'wc'|'mine'|'fish', idx, timer}
+  skills:{wc:{xp:0},mine:{xp:0},fish:{xp:0}},
+  inv:[], coins:25,
+  quests:{}, // id -> 'active'|'done'
+  col:'#e8a33d',
+};
+function starterKit(){
+  player.inv=[
+    {id:'bronze_axe',qty:1},{id:'bronze_pick',qty:1},{id:'wood_rod',qty:1},
+  ];
+}
+function saveGame(){
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify({
+    name:player.name,x:player.x,y:player.y,skills:player.skills,inv:player.inv,
+    coins:player.coins,quests:player.quests,col:player.col,
+  }))}catch(e){}
+}
+function loadGame(){
+  try{
+    const s=JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(!s)return false;
+    player.name=s.name||'wanderer';player.x=s.x;player.y=s.y;
+    player.skills=s.skills||player.skills;player.inv=s.inv||[];player.coins=s.coins??25;
+    player.quests=s.quests||{};player.col=s.col||player.col;
+    el('nameInput').value=player.name;
+    return true;
+  }catch(e){return false}
+}
+function addItem(id,qty){
+  qty=qty||1;
+  const def=ITEMS[id];
+  if(def.kind!=='tool'){
+    const s=player.inv.find(s=>s.id===id);
+    if(s){s.qty+=qty;return true}
+  }
+  if(player.inv.length>=28)return false;
+  player.inv.push({id,qty});
+  return true;
+}
+function removeItem(id,qty){
+  qty=qty||1;
+  const i=player.inv.findIndex(s=>s.id===id);
+  if(i<0)return false;
+  const s=player.inv[i];
+  if(s.qty<qty)return false;
+  s.qty-=qty;if(s.qty<=0)player.inv.splice(i,1);
+  return true;
+}
+function countItem(id){const s=player.inv.find(s=>s.id===id);return s?s.qty:0}
+function bestTool(kind){
+  let best=null;
+  for(const s of player.inv){const d=ITEMS[s.id];
+    if(d.tool===kind&&player.skillLvl(kindSkillName(kind))>=d.lvl&&(!best||d.speed>ITEMS[best].speed))best=s.id}
+  return best;
+}
+function kindSkillName(kind){return kind==='axe'?'wc':kind==='pick'?'mine':'fish'}
+player.skillLvl=function(sk){return levelForXp(this.skills[sk].xp)};
+
+// ---------- audio (tiny synth) ----------
+let AC=null,soundOn=true;
+function ac(){if(!AC){try{AC=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(AC&&AC.state==='suspended')AC.resume();return AC}
+function blip(freq,dur,type,vol,slide){
+  if(!soundOn)return;const c=ac();if(!c)return;
+  const o=c.createOscillator(),g=c.createGain(),t=c.currentTime;
+  o.type=type||'sine';o.frequency.setValueAtTime(freq,t);
+  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,freq+slide),t+dur);
+  g.gain.setValueAtTime((vol||0.12),t);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(c.destination);o.start(t);o.stop(t+dur+0.02);
+}
+function thump(){if(!soundOn)return;const c=ac();if(!c)return;
+  const b=c.createBuffer(1,c.sampleRate*0.08,c.sampleRate),d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+  const s=c.createBufferSource();s.buffer=b;
+  const f=c.createBiquadFilter();f.type='lowpass';f.frequency.value=420;
+  const g=c.createGain();g.gain.value=0.18;
+  s.connect(f).connect(g).connect(c.destination);s.start();}
+const SFX={
+  chop:()=>{thump();blip(180,0.09,'triangle',0.08,-60)},
+  mine:()=>{blip(1200,0.05,'square',0.05,-700);thump()},
+  splash:()=>{blip(400,0.18,'sine',0.07,-260)},
+  pickup:()=>blip(660,0.08,'sine',0.09,220),
+  coin:()=>{blip(880,0.07,'square',0.06,180);setTimeout(()=>blip(1320,0.09,'square',0.05),60)},
+  level:()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>blip(f,0.16,'triangle',0.1),i*90))},
+  chat:()=>blip(520,0.05,'sine',0.05,60),
+  err:()=>blip(160,0.15,'sawtooth',0.06,-40),
+};
+
+// ---------- floating text ----------
+const floaters=[]; // {x,y,txt,col,t}
+function floatText(wx,wy,txt,col){floaters.push({x:wx,y:wy,txt,col:col||'#e8e0cf',t:0})}
+
+// ---------- chat ----------
+function chatMsg(html,cls){
+  const log=el('chatLog'),d=document.createElement('div');
+  if(cls)d.className=cls;
+  d.innerHTML=html;log.appendChild(d);
+  while(log.children.length>80)log.removeChild(log.firstChild);
+  log.scrollTop=log.scrollHeight;
+}
+function sysMsg(t){chatMsg(t,'sys')}
+function lvlMsg(t){chatMsg(t,'lvl');SFX.level()}
+function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;el('toasts').appendChild(d);setTimeout(()=>d.remove(),2600)}
+
+// ---------- XP ----------
+function gainXp(skill,amt){
+  const before=player.skillLvl(skill);
+  player.skills[skill].xp+=amt;
+  const after=player.skillLvl(skill);
+  const sname={wc:'Woodcutting',mine:'Mining',fish:'Fishing'}[skill];
+  floatText(player.x,player.y-30,'+'+amt+' '+sname+' XP','#e8a33d');
+  if(after>before){
+    lvlMsg('You advance a '+sname+' level. You are now level '+after+'.');
+    toast(sname+' level '+after+'!');
+    floatText(player.x,player.y-52,'LEVEL UP!','#f5d78a');
+  }
+  refreshPanel();
+}
+
+// ---------- pathfinding (A*, 4-dir) ----------
+function findPath(sx,sy,tx,ty){
+  sx=clamp(Math.floor(sx/TILE),0,TW-1);sy=clamp(Math.floor(sy/TILE),0,TH-1);
+  if(solid(tx,ty))return null;
+  const key=(x,y)=>y*TW+x;
+  const open=[{x:sx,y:sy,g:0,f:0}],came=new Map(),gs=new Map([[key(sx,sy),0]]);
+  const seen=new Set();
+  let guard=0;
+  while(open.length&&guard++<4000){
+    let bi=0;for(let i=1;i<open.length;i++)if(open[i].f<open[bi].f)bi=i;
+    const cur=open.splice(bi,1)[0],ck=key(cur.x,cur.y);
+    if(seen.has(ck))continue;seen.add(ck);
+    if(cur.x===tx&&cur.y===ty){
+      const path=[];let k=ck;
+      while(came.has(k)){const x=k%TW,y=(k-x)/TW;path.unshift({x:x*TILE+TILE/2,y:y*TILE+TILE/2});k=came.get(k)}
+      return path;
+    }
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=cur.x+dx,ny=cur.y+dy;
+      if(solid(nx,ny)&&!(nx===tx&&ny===ty))continue;
+      const nk=key(nx,ny),ng=cur.g+1;
+      if(gs.has(nk)&&gs.get(nk)<=ng)continue;
+      gs.set(nk,ng);came.set(nk,ck);
+      open.push({x:nx,y:ny,g:ng,f:ng+Math.abs(tx-nx)+Math.abs(ty-ny)});
+    }
+  }
+  return null;
+}
+function adjacentFree(tx,ty){
+  const opts=[];
+  for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1],[1,-1],[-1,1]]){
+    const nx=tx+dx,ny=ty+dy;
+    if(!solid(nx,ny))opts.push({x:nx,y:ny,d:dist(nx,ny,player.x/TILE,player.y/TILE)});
+  }
+  opts.sort((a,b)=>a.d-b.d);
+  return opts;
+}
+
+// ---------- interactions ----------
+const TREES={
+  [OBJ_TREE]:{lvl:1,xp:25,item:'logs',name:'tree',tool:'axe',respawn:12000,sfx:'chop'},
+  [OBJ_OAK]:{lvl:15,xp:37,item:'oak_logs',name:'oak',tool:'axe',respawn:20000,sfx:'chop'},
+  [OBJ_WILLOW]:{lvl:30,xp:67,item:'willow_logs',name:'willow',tool:'axe',respawn:30000,sfx:'chop'},
+  [OBJ_COPPER]:{lvl:1,xp:17,item:'copper_ore',name:'copper rock',tool:'pick',respawn:15000,sfx:'mine'},
+  [OBJ_IRON]:{lvl:15,xp:35,item:'iron_ore',name:'iron rock',tool:'pick',respawn:25000,sfx:'mine'},
+  [OBJ_GOLD]:{lvl:40,xp:65,item:'gold_ore',name:'gold rock',tool:'pick',respawn:40000,sfx:'mine'},
+  [OBJ_FISH]:{lvl:1,xp:10,item:null,name:'fishing spot',tool:'rod',respawn:22000,sfx:'splash'},
+};
+const FISH_TABLE=[
+  {lvl:1,item:'shrimp',xp:10,w:60},
+  {lvl:20,item:'trout',xp:50,w:30},
+  {lvl:35,item:'bass',xp:90,w:12},
+];
+function fishFor(lvl){
+  const avail=FISH_TABLE.filter(f=>lvl>=f.lvl);
+  const tot=avail.reduce((a,f)=>a+f.w,0);let roll=Math.random()*tot;
+  for(const f of avail){roll-=f.w;if(roll<=0)return f}
+  return avail[0];
+}
+function startAction(idx,o){
+  const def=TREES[o.t];
+  const sk=kindSkillName(def.tool);
+  const lvl=player.skillLvl(sk);
+  if(lvl<def.lvl){sysMsg('You need '+({wc:'Woodcutting',mine:'Mining',fish:'Fishing'})[sk]+' level '+def.lvl+' to work this '+def.name+'.');SFX.err();return}
+  const tool=bestTool(def.tool);
+  if(!tool){sysMsg('You need a '+({axe:'axe',pick:'pickaxe',rod:'fishing rod'})[def.tool]+' for that.');SFX.err();return}
+  player.action={idx,def,toolId:tool,timer:0};
+}
+function stopAction(){player.action=null}
+function tickAction(dt){
+  const a=player.action;
+  if(!a)return;
+  const o=objects.get(a.idx);
+  if(!o||o.hp<=0){stopAction();return}
+  const ox=(a.idx%TW)*TILE+TILE/2,oy=Math.floor(a.idx/TW)*TILE+TILE/2;
+  if(dist(player.x,player.y,ox,oy)>TILE*2.1){stopAction();return}
+  a.timer+=dt*ITEMS[a.toolId].speed;
+  if(a.timer>=1400){
+    a.timer=0;
+    SFX[a.def.sfx]();
+    const sk=kindSkillName(a.def.tool);
+    const lvl=player.skillLvl(sk);
+    const chance=Math.min(0.85,0.45+lvl*0.012);
+    if(Math.random()<chance){
+      let item=a.def.item,xp=a.def.xp;
+      if(o.t===OBJ_FISH){const f=fishFor(lvl);item=f.item;xp=f.xp}
+      if(addItem(item,1)){
+        gainXp(sk,xp);
+        floatText(ox,oy-24,'+1 '+ITEMS[item].name,'#8fb56a');
+        SFX.pickup();
+        checkQuestProgress();
+      }else{
+        sysMsg('Your bag is full.');SFX.err();stopAction();return;
+      }
+    }
+    if(Math.random()<0.35){ // deplete
+      o.hp=0;o.respawnAt=performance.now()+a.def.respawn;
+      if(o.t===OBJ_FISH)sysMsg('The fish move on.');
+      stopAction();
+    }
+  }
+}
+
+// ---------- quests ----------
+function checkQuestProgress(){
+  for(const n of NPCS){
+    if(!n.quest||player.quests[n.quest.id]!=='active')continue;
+    // progress shown in journal; completion happens on talk
+  }
+  refreshPanel();
+}
+function questReady(n){return player.quests[n.quest.id]==='active'&&countItem(n.quest.need.item)>=n.quest.need.qty}
+function completeQuest(n){
+  const q=n.quest;
+  removeItem(q.need.item,q.need.qty);
+  player.coins+=q.reward.coins;
+  player.quests[q.id]='done';
+  SFX.coin();
+  gainXp(q.reward.xp.skill,q.reward.xp.amt);
+  toast('Quest complete: '+q.title);
+  lvlMsg('Quest complete! You receive '+q.reward.coins+' coins.');
+  saveGame();
+}
+
+// ---------- dialog ----------
+let dlgNpc=null;
+function openDialog(n){
+  dlgNpc=n;
+  el('dlgName').textContent=n.name;
+  const txt=el('dlgTxt'),opts=el('dlgOpts');
+  opts.innerHTML='';
+  if(n.shop){
+    txt.textContent='Tools, tackle, and a fair price for whatever you haul in. Take a look.';
+    addDlgOpt('Browse the wares',()=>{closeDialog();openShop()});
+    addDlgOpt('Just passing through.',closeDialog);
+  }else if(n.quest){
+    const q=n.quest,st=player.quests[q.id];
+    if(!st){
+      txt.textContent=q.offer;
+      addDlgOpt('Accept: '+q.title,()=>{player.quests[q.id]='active';sysMsg('New quest: '+q.title);saveGame();refreshPanel();closeDialog();openDialog(n)});
+      addDlgOpt('Not right now.',closeDialog);
+    }else if(st==='active'){
+      const have=countItem(q.need.item);
+      if(have>=q.need.qty){
+        txt.textContent=q.thanks;
+        addDlgOpt('Hand over '+q.need.qty+' '+ITEMS[q.need.item].name.toLowerCase(),()=>{completeQuest(n);closeDialog()});
+      }else{
+        txt.textContent='Still at it? Bring me '+q.need.qty+' '+ITEMS[q.need.item].name.toLowerCase()+'. You carry '+have+'.';
+        addDlgOpt('On my way.',closeDialog);
+      }
+    }else{
+      txt.textContent={'maera':'The road is clear and the carts are rolling. You did that.','doran':'The forge burns hot thanks to you.','brinn':'Still cannot believe you landed five. The lake remembers.'}[n.id]||'Good to see you.';
+      addDlgOpt('Farewell.',closeDialog);
+    }
+  }
+  el('dialog').classList.remove('hidden');
+}
+function addDlgOpt(label,fn){
+  const b=document.createElement('button');b.textContent=label;b.onclick=fn;el('dlgOpts').appendChild(b);
+}
+function closeDialog(){el('dialog').classList.add('hidden');dlgNpc=null}
+
+// ---------- shop ----------
+function openShop(){
+  el('shop').classList.remove('hidden');
+  renderShop();
+}
+function closeShop(){el('shop').classList.add('hidden')}
+function renderShop(){
+  el('shopName').textContent="Rennick's General Store";
+  const st=el('shopStock');st.innerHTML='';
+  for(const row of SHOP_STOCK){
+    const def=ITEMS[row.id];
+    const d=document.createElement('div');d.className='shopRow'+(player.coins<row.price?' dis':'');
+    d.appendChild(itemIcon(row.id));
+    const info=document.createElement('div');info.className='info';
+    info.innerHTML='<div class="n">'+def.name+' <span style="color:#6d6350;font-size:.68rem">'+({axe:'Woodcutting',pick:'Mining',rod:'Fishing'})[def.tool]+' lvl '+def.lvl+'+</span></div><div class="p">'+row.price+' coins</div>';
+    d.appendChild(info);
+    if(player.coins>=row.price)d.onclick=()=>{
+      player.coins-=row.price;addItem(row.id,1);SFX.coin();
+      sysMsg('You buy a '+def.name+'.');saveGame();renderShop();refreshPanel();
+    };
+    st.appendChild(d);
+  }
+  const mine=el('shopMine');mine.innerHTML='';
+  const sellable=player.inv.filter(s=>ITEMS[s.id].sell>0);
+  if(!sellable.length)mine.innerHTML='<div style="color:#6d6350;font-size:.8rem;padding:.4rem">Nothing they would buy.</div>';
+  for(const s of sellable){
+    const def=ITEMS[s.id];
+    const d=document.createElement('div');d.className='shopRow';
+    d.appendChild(itemIcon(s.id));
+    const info=document.createElement('div');info.className='info';
+    info.innerHTML='<div class="n">'+def.name+' &times;'+s.qty+'</div><div class="p">sell all: '+(def.sell*s.qty)+' coins</div>';
+    d.appendChild(info);
+    d.onclick=()=>{const n=s.qty;removeItem(s.id,n);player.coins+=def.sell*n;SFX.coin();sysMsg('You sell '+n+' '+def.name.toLowerCase()+'.');saveGame();renderShop();refreshPanel()};
+    mine.appendChild(d);
+  }
+  el('coinsVal').textContent=player.coins;
+}
+el('shopClose').onclick=closeShop;
+
+// ---------- item icons (procedural) ----------
+function itemIcon(id){
+  const c=document.createElement('canvas');c.width=c.height=40;
+  const g=c.getContext('2d'),d=ITEMS[id];
+  g.translate(20,20);
+  drawItemGlyph(g,id,d,1);
+  return c;
+}
+function drawItemGlyph(g,id,d,s){
+  s=s||1;g.save();g.scale(s,s);
+  g.fillStyle=d.col;g.strokeStyle='rgba(0,0,0,.35)';g.lineWidth=1.5;
+  const k=d.kind;
+  if(k==='wood'){
+    g.rotate(-0.5);g.beginPath();g.roundRect(-12,-4,24,9,4);g.fill();g.stroke();
+    g.fillStyle='rgba(255,255,255,.18)';g.fillRect(-12,-4,24,2.5);
+  }else if(k==='ore'){
+    g.beginPath();g.moveTo(-9,6);g.lineTo(-4,-8);g.lineTo(6,-6);g.lineTo(10,4);g.lineTo(2,9);g.closePath();g.fill();g.stroke();
+    g.fillStyle='rgba(255,255,255,.3)';g.beginPath();g.arc(-2,-2,2.2,0,7);g.fill();
+  }else if(k==='fish'){
+    g.beginPath();g.ellipse(0,0,11,5.5,0,0,7);g.fill();g.stroke();
+    g.beginPath();g.moveTo(10,0);g.lineTo(16,-5);g.lineTo(16,5);g.closePath();g.fill();
+    g.fillStyle='#141210';g.beginPath();g.arc(-6,-1,1.4,0,7);g.fill();
+  }else if(d.tool==='axe'){
+    g.strokeStyle='#8a6f4d';g.lineWidth=3;g.beginPath();g.moveTo(-9,10);g.lineTo(6,-5);g.stroke();
+    g.fillStyle=d.col;g.beginPath();g.moveTo(2,-10);g.quadraticCurveTo(13,-9,9,1);g.lineTo(2,-2);g.closePath();g.fill();
+  }else if(d.tool==='pick'){
+    g.strokeStyle='#8a6f4d';g.lineWidth=3;g.beginPath();g.moveTo(-8,10);g.lineTo(5,-6);g.stroke();
+    g.strokeStyle=d.col;g.lineWidth=3.4;g.beginPath();g.moveTo(-6,-6);g.quadraticCurveTo(3,-13,12,-6);g.stroke();
+  }else if(d.tool==='rod'){
+    g.strokeStyle=d.col;g.lineWidth=2.6;g.beginPath();g.moveTo(-10,11);g.quadraticCurveTo(4,-2,9,-11);g.stroke();
+    g.strokeStyle='rgba(232,224,207,.6)';g.lineWidth=1;g.beginPath();g.moveTo(9,-11);g.lineTo(11,2);g.stroke();
+    g.fillStyle='#d4694f';g.beginPath();g.arc(11,5,2,0,7);g.fill();
+  }
+  g.restore();
+}
+
+// ---------- side panel ----------
+let activeTab='inv';
+function refreshPanel(){
+  el('coinsVal').textContent=player.coins;
+  const body=el('tabBody');
+  if(activeTab==='inv'){
+    body.innerHTML='';
+    const grid=document.createElement('div');grid.id='invGrid';
+    for(let i=0;i<28;i++){
+      const s=player.inv[i],cell=document.createElement('div');cell.className='slot';
+      if(s){
+        cell.appendChild(itemIcon(s.id));
+        if(s.qty>1){const q=document.createElement('span');q.className='qty';q.textContent=s.qty;cell.appendChild(q)}
+        const nm=document.createElement('span');nm.className='nm';nm.textContent=ITEMS[s.id].name;cell.appendChild(nm);
+      }
+      grid.appendChild(cell);
+    }
+    body.appendChild(grid);
+  }else if(activeTab==='skills'){
+    body.innerHTML='';
+    const rows=[['wc','Woodcutting','#8fb56a'],['mine','Mining','#a8a29e'],['fish','Fishing','#8ab8c8']];
+    let total=0;
+    for(const[sk,name,col]of rows){
+      const xp=player.skills[sk].xp,lvl=levelForXp(xp);total+=lvl;
+      const base=xpTable[lvl-1],next=lvl<XP_MAX_LEVEL?xpTable[lvl]:xp;
+      const pct=next>base?clamp((xp-base)/(next-base)*100,0,100):100;
+      const d=document.createElement('div');d.className='skillRow';
+      d.innerHTML='<div class="top"><span style="color:'+col+'">'+name+'</span><span class="lvl">'+lvl+'</span></div><div class="bar"><i style="width:'+pct+'%"></i></div>';
+      body.appendChild(d);
+    }
+    const t=document.createElement('div');
+    t.style.cssText='margin-top:.8rem;font-size:.75rem;color:#a89e88;text-align:center';
+    t.textContent='Total level '+total;
+    body.appendChild(t);
+  }else if(activeTab==='quests'){
+    body.innerHTML='';
+    let any=false;
+    for(const n of NPCS){
+      if(!n.quest)continue;
+      const st=player.quests[n.quest.id];
+      if(!st)continue;
+      any=true;
+      const q=n.quest,d=document.createElement('div');
+      d.className='quest'+(st==='done'?' done':'');
+      let prog;
+      if(st==='done')prog='Complete';
+      else prog=countItem(q.need.item)+' / '+q.need.qty+' '+ITEMS[q.need.item].name.toLowerCase();
+      d.innerHTML='<h3>'+q.title+'</h3><div class="who">'+n.name+'</div><p>'+(st==='done'?q.thanks:q.offer)+'</p><div class="prog">'+prog+'</div>';
+      body.appendChild(d);
+    }
+    if(!any)body.innerHTML='<div style="color:#6d6350;font-size:.85rem;padding:.6rem;line-height:1.6">No quests yet. The folk of Emberwick could use a hand - walk up and talk to them.</div>';
+  }else{
+    body.innerHTML='';
+    const mk=(label,val,fn)=>{
+      const d=document.createElement('div');d.className='setRow';
+      const l=document.createElement('span');l.textContent=label;
+      const b=document.createElement('button');b.textContent=val;b.onclick=fn;
+      d.appendChild(l);d.appendChild(b);body.appendChild(d);
+    };
+    mk('Sound',soundOn?'on':'off',()=>{soundOn=!soundOn;refreshPanel()});
+    mk('Reset save','wipe',()=>{if(confirm('Wipe your Emberwild save on this device?')){localStorage.removeItem(SAVE_KEY);location.reload()}});
+    const about=document.createElement('div');
+    about.style.cssText='margin-top:1rem;font-size:.72rem;color:#6d6350;line-height:1.7';
+    about.innerHTML='EMBERWILD v1.0<br>A realm that fits in one file. Other wanderers appear when they are online in the same realm. Progress never leaves your device.';
+    body.appendChild(about);
+  }
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');activeTab=b.dataset.tab;refreshPanel();
+});
+el('panelToggle').onclick=()=>el('panel').classList.toggle('open');
+
+// ---------- rendering ----------
+const cv=el('game'),ctx=cv.getContext('2d');
+let VW=0,VH=0,DPR=1;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  VW=window.innerWidth;VH=window.innerHeight;
+  cv.width=VW*DPR;cv.height=VH*DPR;
+  cv.style.width=VW+'px';cv.style.height=VH+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);resize();
+const cam={x:0,y:0};
+
+// grass detail cache
+const grassDots=[];
+(function(){const r=mulberry32(99);
+  for(let y=0;y<TH;y++)for(let x=0;x<TW;x++){
+    if(terrain[y*TW+x]!==T.GRASS)continue;
+    if(r()<0.5)grassDots.push({x:x*TILE+r()*TILE,y:y*TILE+r()*TILE,c:r()<0.5?'rgba(0,0,0,.10)':'rgba(255,255,255,.05)',s:1+r()*2.4});
+  }
+})();
+let dayT=0.32; // 0..1 day cycle
+const DAY_LEN=300000; // 5 min cycle
+
+function tileColor(t,x,y){
+  const v=((x*7+y*13)%5-2)*4;
+  switch(t){
+    case T.GRASS:return 'rgb('+(74+v)+','+(103+v)+','+(65+v)+')';
+    case T.WATER:return 'rgb('+(34+v)+','+(69+v)+','+(79+v)+')';
+    case T.PATH:return 'rgb('+(138+v)+','+(111+v)+','+(77+v)+')';
+    case T.STONE:return 'rgb('+(95+v)+','+(102+v)+','+(110+v)+')';
+    case T.SAND:return 'rgb('+(168+v)+','+(152+v)+','+(110+v)+')';
+    case T.FLOOR:return 'rgb('+(107+v)+','+(111+v)+','+(114+v)+')';
+    default:return '#4a6741';
+  }
+}
+function drawWorld(){
+  const x0=Math.max(0,Math.floor(cam.x/TILE)),x1=Math.min(TW-1,Math.ceil((cam.x+VW)/TILE));
+  const y0=Math.max(0,Math.floor(cam.y/TILE)),y1=Math.min(TH-1,Math.ceil((cam.y+VH)/TILE));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const t=terrain[y*TW+x];
+    ctx.fillStyle=tileColor(t,x,y);
+    ctx.fillRect(x*TILE-cam.x,y*TILE-cam.y,TILE+1,TILE+1);
+    if(t===T.WATER){
+      const w=Math.sin(performance.now()/900+x*1.7+y*2.3)*0.5+0.5;
+      ctx.fillStyle='rgba(255,255,255,'+(0.03+w*0.05)+')';
+      ctx.fillRect(x*TILE-cam.x+4,y*TILE-cam.y+8+((x+y)%3)*6,TILE-14,2);
+    }
+  }
+  // grass detail
+  ctx.save();
+  for(const d of grassDots){
+    if(d.x<cam.x-10||d.x>cam.x+VW+10||d.y<cam.y-10||d.y>cam.y+VH+10)continue;
+    ctx.fillStyle=d.c;ctx.fillRect(d.x-cam.x,d.y-cam.y,d.s,d.s);
+  }
+  ctx.restore();
+}
+function drawTree(g,x,y,kind,depleted){
+  // x,y = screen pos of tile center (base)
+  g.save();g.translate(x,y);
+  if(depleted){
+    g.fillStyle='#5a4632';g.fillRect(-3,-6,6,8);g.restore();return;
+  }
+  const cfg={
+    [OBJ_TREE]:{c1:'#2e4d2e',c2:'#3c5f38',c3:'#4a7042',h:34,r:15,trunk:'#5a4632'},
+    [OBJ_OAK]:{c1:'#3a5a28',c2:'#4d7032',c3:'#5f8440',h:40,r:18,trunk:'#4d3a26'},
+    [OBJ_WILLOW]:{c1:'#4d6e3a',c2:'#628a48',c3:'#749c54',h:38,r:16,trunk:'#6a5a3a'},
+  }[kind];
+  // shadow
+  g.fillStyle='rgba(0,0,0,.22)';g.beginPath();g.ellipse(0,2,cfg.r*0.8,5,0,0,7);g.fill();
+  // trunk
+  g.fillStyle=cfg.trunk;g.fillRect(-2.5,-cfg.h*0.45,5,cfg.h*0.5);
+  // canopy blobs
+  const cx=cfg.h*0.45;
+  g.fillStyle=cfg.c1;g.beginPath();g.arc(0,-cx-6,cfg.r,0,7);g.fill();
+  g.fillStyle=cfg.c2;g.beginPath();g.arc(-cfg.r*0.45,-cx-cfg.r*0.5,cfg.r*0.62,0,7);g.fill();
+  g.fillStyle=cfg.c3;g.beginPath();g.arc(cfg.r*0.35,-cx-cfg.r*0.62,cfg.r*0.5,0,7);g.fill();
+  if(kind===OBJ_WILLOW){
+    g.strokeStyle='rgba(116,156,84,.7)';g.lineWidth=1.4;
+    for(let i=-2;i<=2;i++){g.beginPath();g.moveTo(i*5,-cx-4);g.quadraticCurveTo(i*6,-cx+8,i*6.5,-cx+16);g.stroke()}
+  }
+  g.restore();
+}
+function drawRock(g,x,y,kind,depleted){
+  g.save();g.translate(x,y);
+  const ore={[OBJ_COPPER]:'#b87333',[OBJ_IRON]:'#c8c2ba',[OBJ_GOLD]:'#d4af37'}[kind];
+  g.fillStyle='rgba(0,0,0,.25)';g.beginPath();g.ellipse(0,4,14,4.5,0,0,7);g.fill();
+  g.fillStyle=depleted?'#565d66':'#687078';
+  g.beginPath();g.moveTo(-13,4);g.lineTo(-7,-12);g.lineTo(3,-16);g.lineTo(13,-6);g.lineTo(11,4);g.closePath();g.fill();
+  g.strokeStyle='rgba(0,0,0,.3)';g.stroke();
+  if(!depleted){
+    g.fillStyle=ore;
+    g.beginPath();g.arc(-4,-6,2.4,0,7);g.fill();
+    g.beginPath();g.arc(4,-9,2,0,7);g.fill();
+    g.beginPath();g.arc(6,-2,1.8,0,7);g.fill();
+  }
+  g.restore();
+}
+function drawFishSpot(g,x,y,active){
+  g.save();g.translate(x,y);
+  const t=performance.now()/600;
+  g.strokeStyle=active?'rgba(245,215,138,.8)':'rgba(200,230,240,.45)';
+  g.lineWidth=1.6;
+  for(let i=0;i<3;i++){
+    const r=((t+i*1.3)%4)*3+2;
+    g.globalAlpha=Math.max(0,1-r/14)*0.8;
+    g.beginPath();g.ellipse(0,0,r,r*0.45,0,0,7);g.stroke();
+  }
+  g.restore();
+}
+function drawBuilding(g,o,sx,sy){
+  // draw once per building, keyed by top-left
+  if(o.bx===undefined||(o.idx!==o.by*TW+o.bx))return;
+  const x=o.bx*TILE-cam.x,y=o.by*TILE-cam.y,w=o.bw*TILE,h=o.bh*TILE;
+  g.fillStyle='rgba(0,0,0,.3)';g.fillRect(x+4,y+6,w,h);
+  g.fillStyle='#6d5a42';g.fillRect(x,y+10,w,h-10);          // walls
+  g.fillStyle='#8a4636';                                     // roof
+  g.beginPath();g.moveTo(x-6,y+12);g.lineTo(x+w/2,y-14);g.lineTo(x+w+6,y+12);g.closePath();g.fill();
+  g.fillStyle='#a85a44';
+  g.beginPath();g.moveTo(x-2,y+10);g.lineTo(x+w/2,y-10);g.lineTo(x+w+2,y+10);g.closePath();g.fill();
+  g.fillStyle='#3a2f22';g.fillRect(x+w/2-6,y+h-16,12,16);    // door
+  g.fillStyle='#f5d78a';g.fillRect(x+8,y+18,7,7);g.fillRect(x+w-15,y+18,7,7); // windows
+}
+function drawNPC(g,n,t){
+  const x=n.x*TILE+TILE/2-cam.x,y=n.y*TILE+TILE/2-cam.y;
+  const bob=Math.sin(t/420+n.x)*1.4;
+  drawHumanoid(g,x,y+bob,n.col,false,n.name,questReady(n)?'!':(n.quest&&!player.quests[n.quest.id]?'!':null));
+}
+function drawHumanoid(g,x,y,col,isSelf,name,mark){
+  g.save();g.translate(x,y);
+  g.fillStyle='rgba(0,0,0,.28)';g.beginPath();g.ellipse(0,3,9,3.5,0,0,7);g.fill();
+  // legs
+  g.fillStyle='#3a3226';g.fillRect(-5,-8,4,9);g.fillRect(1,-8,4,9);
+  // body
+  g.fillStyle=col;g.beginPath();g.roundRect(-7,-20,14,14,4);g.fill();
+  // head
+  g.fillStyle='#d9a066';g.beginPath();g.arc(0,-25,6,0,7);g.fill();
+  g.fillStyle='rgba(0,0,0,.18)';g.beginPath();g.arc(0,-27,6,Math.PI,0);g.fill();
+  g.restore();
+  if(name){
+    g.font='11px system-ui,sans-serif';g.textAlign='center';
+    g.fillStyle='rgba(0,0,0,.55)';g.fillText(name,x+1,y-34);
+    g.fillStyle=isSelf?'#f5d78a':'#cfe0ee';g.fillText(name,x,y-35);
+  }
+  if(mark){
+    g.font='bold 15px Georgia,serif';g.textAlign='center';
+    g.fillStyle='#f5d78a';g.fillText(mark,x,y-42);
+  }
+}
+function drawPlayerSelf(g,t){
+  const x=player.x-cam.x,y=player.y-cam.y;
+  const bob=player.moving?Math.sin(t/110)*1.6:0;
+  drawHumanoid(g,x,y+bob,player.col,true,player.name);
+  // action progress
+  if(player.action){
+    const a=player.action,pct=clamp(a.timer/1400,0,1);
+    g.fillStyle='rgba(0,0,0,.5)';g.fillRect(x-14,y-46,28,5);
+    g.fillStyle='#e8a33d';g.fillRect(x-14,y-46,28*pct,5);
+    // swing anim
+    const sw=Math.sin(t/140)*0.6;
+    g.strokeStyle='#d9d0bd';g.lineWidth=2.4;
+    g.beginPath();g.moveTo(x,y-14);g.lineTo(x+12*Math.cos(sw-0.6)*player.dir,y-14+12*Math.sin(sw-0.6));g.stroke();
+  }
+}
+function nightOverlay(){
+  // 0 = midnight, 0.5 = noon
+  const cyc=(Math.sin(dayT*Math.PI*2-Math.PI/2)+1)/2; // 0 dark .. 1 bright
+  const dark=1-cyc;
+  if(dark>0.05){
+    ctx.fillStyle='rgba(10,14,34,'+(dark*0.5)+')';
+    ctx.fillRect(0,0,VW,VH);
+    // lantern glows in town
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    for(const n of NPCS){
+      const x=n.x*TILE+TILE/2-cam.x,y=n.y*TILE+TILE/2-cam.y;
+      const gr=ctx.createRadialGradient(x,y,4,x,y,70);
+      gr.addColorStop(0,'rgba(232,163,61,'+(0.25*dark)+')');gr.addColorStop(1,'rgba(232,163,61,0)');
+      ctx.fillStyle=gr;ctx.beginPath();ctx.arc(x,y,70,0,7);ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function drawMinimap(){
+  const mm=el('minimap'),g=mm.getContext('2d');
+  const sx=mm.width/TW,sy=mm.height/TH;
+  for(let y=0;y<TH;y+=1)for(let x=0;x<TW;x+=1){
+    g.fillStyle=tileColor(terrain[y*TW+x],x,y);
+    g.fillRect(x*sx,y*sy,sx+0.5,sy+0.5);
+  }
+  // peers
+  for(const id in peers){
+    const p=peers[id];
+    g.fillStyle='#9fc2e8';g.fillRect(p.x/TILE*sx-1.5,p.y/TILE*sy-1.5,3,3);
+  }
+  // self
+  g.fillStyle='#f5d78a';g.fillRect(player.x/TILE*sx-2,player.y/TILE*sy-2,4,4);
+  // viewport
+  g.strokeStyle='rgba(255,255,255,.4)';g.lineWidth=1;
+  g.strokeRect(cam.x/TILE*sx,cam.y/TILE*sy,VW/TILE*sx,VH/TILE*sy);
+}
+
+// ---------- multiplayer presence (PeerJS public broker, fixed-slot room) ----------
+const peers={};       // pid -> {x,y,tx,ty,dir,name,col,conn,lastSeen,action}
+let netPeer=null,netSlot=-1,netOnline=false;
+const NET_SLOTS=8,NET_PREFIX='emberwild-w1-slot-';
+function netStart(){
+  if(window.__peerFailed||typeof Peer==='undefined'){setNetStatus(false,'offline realm');return}
+  trySlot(0);
+}
+function trySlot(n){
+  if(n>=NET_SLOTS){setNetStatus(false,'realm full - you wander alone');return}
+  let p;
+  try{p=new Peer(NET_PREFIX+n,{debug:0})}catch(e){setNetStatus(false,'offline realm');return}
+  let claimed=false;
+  const to=setTimeout(()=>{if(!claimed){try{p.destroy()}catch(e){}trySlot(n+1)}},3500);
+  p.on('open',()=>{
+    claimed=true;clearTimeout(to);
+    netPeer=p;netSlot=n;setNetStatus(true,'realm link open');
+    sysMsg('You feel the presence of the realm. Wanderers online can see you.');
+    p.on('connection',c=>setupConn(c));
+    // dial the other slots
+    for(let i=0;i<NET_SLOTS;i++){
+      if(i===n)continue;
+      try{const c=p.connect(NET_PREFIX+i,{reliable:true});setupConn(c)}catch(e){}
+    }
+    // re-dial occasionally to catch late joiners
+    setInterval(()=>{
+      if(!netPeer)return;
+      for(let i=0;i<NET_SLOTS;i++){
+        if(i===netSlot)continue;
+        const id=NET_PREFIX+i;
+        const existing=Object.values(peers).find(pp=>pp.pid===id);
+        if(!existing){try{setupConn(netPeer.connect(id,{reliable:true}))}catch(e){}}
+      }
+    },20000);
+  });
+  p.on('error',e=>{
+    clearTimeout(to);
+    if(e&&e.type==='unavailable-id'&&!claimed){try{p.destroy()}catch(e){}trySlot(n+1)}
+    else if(!claimed){try{p.destroy()}catch(e){}setNetStatus(false,'offline realm')}
+  });
+  p.on('disconnected',()=>{try{p.reconnect()}catch(e){}});
+}
+function setupConn(c){
+  c.on('open',()=>{
+    c.send({t:'hi',name:player.name,col:player.col,x:player.x,y:player.y});
+  });
+  c.on('data',m=>{
+    if(!m||!m.t)return;
+    const pid=c.peer;
+    if(m.t==='hi'){
+      if(!peers[pid]){peers[pid]={pid,x:m.x,y:m.y,tx:m.x,ty:m.y,name:m.name||'wanderer',col:m.col||'#9fc2e8',conn:c,lastSeen:performance.now(),moving:false};updateNetCount()}
+      else{peers[pid].conn=c;peers[pid].name=m.name;peers[pid].col=m.col;peers[pid].lastSeen=performance.now()}
+      if(c.open)c.send({t:'hi',name:player.name,col:player.col,x:player.x,y:player.y});
+    }else if(m.t==='s'&&peers[pid]){
+      const p=peers[pid];p.tx=m.x;p.ty=m.y;p.moving=!!m.m;p.action=m.a||null;p.lastSeen=performance.now();
+    }else if(m.t==='chat'){
+      SFX.chat();
+      chatMsg('<b>'+esc(m.n||'???')+':</b> '+esc(m.x),'p');
+    }else if(m.t==='bye'&&peers[pid]){
+      delete peers[pid];updateNetCount();
+    }
+  });
+  c.on('close',()=>{if(peers[c.peer]&&peers[c.peer].conn===c){delete peers[c.peer];updateNetCount()}});
+  c.on('error',()=>{});
+}
+function setNetStatus(on,label){
+  netOnline=on;
+  el('netDot').classList.toggle('on',on);
+  el('netLabel').textContent=label;
+  updateNetCount();
+}
+function updateNetCount(){
+  if(netOnline)el('netLabel').textContent=(Object.keys(peers).length+1)+' in realm';
+}
+let netLast=0;
+function netTick(t){
+  if(!netOnline||!netPeer)return;
+  if(t-netLast>120){
+    netLast=t;
+    const msg={t:'s',x:Math.round(player.x),y:Math.round(player.y),m:player.moving,a:player.action?player.action.def.name:null};
+    for(const id in peers){const p=peers[id];try{if(p.conn&&p.conn.open)p.conn.send(msg)}catch(e){}}
+  }
+  // prune silent peers
+  for(const id in peers)if(t-peers[id].lastSeen>15000){delete peers[id];updateNetCount()}
+}
+function netChat(text){
+  for(const id in peers){const p=peers[id];try{if(p.conn&&p.conn.open)p.conn.send({t:'chat',n:player.name,x:text})}catch(e){}}
+}
+function netBye(){
+  for(const id in peers){const p=peers[id];try{if(p.conn&&p.conn.open)p.conn.send({t:'bye'})}catch(e){}}
+}
+function drawPeers(g,t){
+  for(const id in peers){
+    const p=peers[id];
+    p.x=lerp(p.x,p.tx,0.15);p.y=lerp(p.y,p.ty,0.15);
+    const x=p.x-cam.x,y=p.y-cam.y;
+    if(x<-40||y<-60||x>VW+40||y>VH+60)continue;
+    const bob=p.moving?Math.sin(t/110)*1.6:0;
+    drawHumanoid(g,x,y+bob,p.col,false,p.name);
+  }
+}
+
+// ---------- input ----------
+const keysDown={};
+let mouseWorld={x:0,y:0};
+function screenToWorld(sx,sy){return{x:sx+cam.x,y:sy+cam.y}}
+function worldToTile(wx,wy){return{x:Math.floor(wx/TILE),y:Math.floor(wy/TILE)}}
+function interactablesAt(tx,ty){
+  const out=[];
+  const o=objects.get(ty*TW+tx);
+  if(o&&o.hp>0&&TREES[o.t])out.push({kind:'obj',o,idx:ty*TW+tx,tx,ty});
+  for(const n of NPCS)if(n.x===tx&&n.y===ty)out.push({kind:'npc',n,tx,ty});
+  return out;
+}
+function nearestInteractable(tx,ty){
+  // search 3x3 around tap for fat-finger tolerance
+  let best=null,bd=99;
+  for(let y=ty-1;y<=ty+1;y++)for(let x=tx-1;x<=tx+1;x++){
+    for(const it of interactablesAt(x,y)){
+      const d=dist(x,y,tx,ty);
+      if(d<bd){bd=d;best=it}
+    }
+  }
+  return best;
+}
+function handleWorldClick(sx,sy,showMenu){
+  const w=screenToWorld(sx,sy),t=worldToTile(w.x,w.y);
+  const it=nearestInteractable(t.x,t.y);
+  if(it&&showMenu){
+    openCtxMenu(sx,sy,it);
+    return;
+  }
+  if(it){
+    doInteract(it);
+    return;
+  }
+  // walk
+  if(solid(t.x,t.y))return;
+  const path=findPath(player.x,player.y,t.x,t.y);
+  if(path){player.path=path;stopAction()}
+}
+function doInteract(it){
+  stopAction();
+  if(it.kind==='npc'){
+    const opts=adjacentFree(it.tx,it.ty);
+    if(!opts.length){sysMsg('You cannot reach them.');return}
+    const near=dist(player.x/TILE,player.y/TILE,it.n.x,it.n.y)<2.2;
+    if(near){openDialog(it.n);return}
+    const path=findPath(player.x,player.y,opts[0].x,opts[0].y);
+    if(path){player.path=path;player.path.thenTalk=it.n}
+    return;
+  }
+  // object: path adjacent then start action
+  const near=dist(player.x/TILE,player.y/TILE,it.tx+0.5,it.ty+0.5)<2.1;
+  if(near){startAction(it.idx,it.o);return}
+  const opts=adjacentFree(it.tx,it.ty);
+  if(!opts.length){sysMsg('You cannot reach that.');return}
+  const path=findPath(player.x,player.y,opts[0].x,opts[0].y);
+  if(path){player.path=path;player.path.thenAction=it}
+}
+function openCtxMenu(sx,sy,it){
+  const m=el('ctxMenu');
+  m.innerHTML='';
+  const head=document.createElement('div');head.className='head';
+  head.textContent=it.kind==='npc'?it.n.name:TREES[it.o.t].name;
+  m.appendChild(head);
+  const mk=(label,fn)=>{
+    const d=document.createElement('div');d.className='opt';d.innerHTML=label;
+    d.onclick=()=>{closeCtxMenu();fn()};m.appendChild(d);
+  };
+  if(it.kind==='npc'){
+    mk('<b>Talk-to</b> '+esc(it.n.name),()=>doInteract(it));
+    if(it.n.shop)mk('<b>Trade</b> '+esc(it.n.name),()=>doInteract(it));
+  }else{
+    const verb={[OBJ_TREE]:'Chop down',[OBJ_OAK]:'Chop down',[OBJ_WILLOW]:'Chop down',[OBJ_COPPER]:'Mine',[OBJ_IRON]:'Mine',[OBJ_GOLD]:'Mine',[OBJ_FISH]:'Fish'}[it.o.t];
+    mk('<b>'+verb+'</b> '+TREES[it.o.t].name,()=>doInteract(it));
+  }
+  mk('Walk here',()=>{
+    if(!solid(it.tx,it.ty)){const p=findPath(player.x,player.y,it.tx,it.ty);if(p){player.path=p;stopAction()}}
+    else{const o=adjacentFree(it.tx,it.ty);if(o.length){const p=findPath(player.x,player.y,o[0].x,o[0].y);if(p){player.path=p;stopAction()}}}
+  });
+  m.style.left=clamp(sx,10,VW-200)+'px';
+  m.style.top=clamp(sy,10,VH-180)+'px';
+  m.classList.remove('hidden');
+}
+function closeCtxMenu(){el('ctxMenu').classList.add('hidden')}
+
+let pressT=0,pressX=0,pressY=0,longPressTimer=null;
+cv.addEventListener('pointerdown',e=>{
+  pressT=performance.now();pressX=e.clientX;pressY=e.clientY;
+  closeCtxMenu();
+  if(longPressTimer)clearTimeout(longPressTimer);
+  longPressTimer=setTimeout(()=>{
+    const it=nearestInteractable(...Object.values(worldToTile(pressX+cam.x,pressY+cam.y)));
+    if(it)openCtxMenu(pressX,pressY,it);
+  },480);
+});
+cv.addEventListener('pointerup',e=>{
+  if(longPressTimer){clearTimeout(longPressTimer);longPressTimer=null}
+  const dt=performance.now()-pressT,moved=dist(e.clientX,e.clientY,pressX,pressY);
+  if(dt<450&&moved<12){
+    if(!el('dialog').classList.contains('hidden')||!el('shop').classList.contains('hidden'))return;
+    handleWorldClick(e.clientX,e.clientY,e.button===2);
+  }
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('keydown',e=>{
+  if(document.activeElement===el('chatInput')||document.activeElement===el('nameInput'))return;
+  keysDown[e.key.toLowerCase()]=true;
+  if(e.key===' '){e.preventDefault();el('panel').classList.toggle('open')}
+  if(e.key==='m'||e.key==='M'){soundOn=!soundOn}
+  if(e.key==='Escape'){closeCtxMenu();closeDialog();closeShop()}
+  if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))e.preventDefault();
+});
+window.addEventListener('keyup',e=>{keysDown[e.key.toLowerCase()]=false});
+el('chatForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const v=el('chatInput').value.trim();
+  if(!v)return;
+  el('chatInput').value='';
+  chatMsg('<b>'+esc(player.name)+':</b> '+esc(v),'p me');
+  netChat(v);
+  el('chatInput').blur();
+});
+el('chatInput').addEventListener('keydown',e=>{
+  if(e.key==='Escape')el('chatInput').blur();
+  e.stopPropagation();
+});
+
+// ---------- movement ----------
+const SPEED=4.6*TILE; // px/s
+function tickMovement(dt){
+  // keyboard movement overrides path
+  let kx=0,ky=0;
+  if(keysDown['w']||keysDown['arrowup'])ky-=1;
+  if(keysDown['s']||keysDown['arrowdown'])ky+=1;
+  if(keysDown['a']||keysDown['arrowleft'])kx-=1;
+  if(keysDown['d']||keysDown['arrowright'])kx+=1;
+  if(kx||ky){
+    player.path=[];stopAction();
+    const len=Math.hypot(kx,ky);
+    const nx=player.x+kx/len*SPEED*dt/1000,ny=player.y+ky/len*SPEED*dt/1000;
+    const tx=Math.floor(nx/TILE),ty=Math.floor(ny/TILE);
+    if(!solid(tx,Math.floor(player.y/TILE)))player.x=nx;
+    if(!solid(Math.floor(player.x/TILE),ty))player.y=ny;
+    player.moving=true;
+    if(kx)player.dir=Math.sign(kx);
+    return;
+  }
+  if(!player.path.length){player.moving=false;return}
+  const wp=player.path[0];
+  const d=dist(player.x,player.y,wp.x,wp.y);
+  if(d<4){
+    player.path.shift();
+    if(!player.path.length){
+      player.moving=false;
+      const talk=player.path.thenTalk,act=player.path.thenAction;
+      player.path.thenTalk=null;player.path.thenAction=null;
+      if(talk)openDialog(talk);
+      else if(act)startAction(act.idx,act.o);
+      return;
+    }
+  }else{
+    const vx=(wp.x-player.x)/d,vy=(wp.y-player.y)/d;
+    player.x+=vx*SPEED*dt/1000;player.y+=vy*SPEED*dt/1000;
+    if(Math.abs(vx)>0.1)player.dir=Math.sign(vx);
+    player.moving=true;
+  }
+}
+
+// ---------- respawns ----------
+function tickRespawns(){
+  const now=performance.now();
+  for(const[idx,o]of objects){
+    if(o.hp===0&&o.respawnAt&&now>=o.respawnAt){o.hp=1;o.respawnAt=0}
+  }
+}
+
+// ---------- main loop ----------
+let lastT=0,started=false,miniT=0,saveT=0;
+function loop(t){
+  requestAnimationFrame(loop);
+  if(!started)return;
+  const dt=Math.min(50,t-lastT);lastT=t;
+  dayT=(dayT+dt/DAY_LEN)%1;
+  tickMovement(dt);
+  tickAction(dt);
+  tickRespawns();
+  netTick(t);
+  cam.x=clamp(player.x-VW/2,0,TW*TILE-VW);
+  cam.y=clamp(player.y-VH/2,0,TH*TILE-VH);
+  // draw
+  ctx.clearRect(0,0,VW,VH);
+  drawWorld();
+  // objects sorted by y for depth
+  const x0=Math.max(0,Math.floor(cam.x/TILE)-1),x1=Math.min(TW-1,Math.ceil((cam.x+VW)/TILE)+1);
+  const y0=Math.max(0,Math.floor(cam.y/TILE)-1),y1=Math.min(TH-1,Math.ceil((cam.y+VH)/TILE)+1);
+  const drawList=[];
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const idx=y*TW+x,o=objects.get(idx);
+    if(!o)continue;
+    if(o.t===OBJ_BUILD){drawBuilding(ctx,Object.assign({idx},o),0,0);continue}
+    drawList.push({y,o,idx});
+  }
+  drawList.sort((a,b)=>a.y-b.y);
+  for(const d of drawList){
+    const sx=(d.idx%TW)*TILE+TILE/2-cam.x,sy=Math.floor(d.idx/TW)*TILE+TILE-cam.y-4;
+    if(d.o.t===OBJ_TREE||d.o.t===OBJ_OAK||d.o.t===OBJ_WILLOW)drawTree(ctx,sx,sy,d.o.t,d.o.hp<=0);
+    else if(d.o.t===OBJ_COPPER||d.o.t===OBJ_IRON||d.o.t===OBJ_GOLD)drawRock(ctx,sx,sy,d.o.t,d.o.hp<=0);
+    else if(d.o.t===OBJ_FISH&&d.o.hp>0)drawFishSpot(ctx,(d.idx%TW)*TILE+TILE/2-cam.x,Math.floor(d.idx/TW)*TILE+TILE/2-cam.y,player.action&&player.action.idx===d.idx);
+  }
+  for(const n of NPCS)drawNPC(ctx,n,t);
+  drawPeers(ctx,t);
+  drawPlayerSelf(ctx,t);
+  nightOverlay();
+  // floaters
+  ctx.font='600 13px ui-monospace,monospace';ctx.textAlign='center';
+  for(let i=floaters.length-1;i>=0;i--){
+    const f=floaters[i];f.t+=dt;
+    const a=1-f.t/1400;
+    if(a<=0){floaters.splice(i,1);continue}
+    ctx.globalAlpha=a;
+    ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillText(f.txt,f.x-cam.x+1,f.y-cam.y-f.t*0.03+1);
+    ctx.fillStyle=f.col;ctx.fillText(f.txt,f.x-cam.x,f.y-cam.y-f.t*0.03);
+    ctx.globalAlpha=1;
+  }
+  if(t-miniT>250){miniT=t;drawMinimap()}
+  if(t-saveT>5000){saveT=t;saveGame()}
+}
+requestAnimationFrame(loop);
+
+// ---------- title / boot ----------
+function emberAnim(){
+  const c=el('embers'),g=c.getContext('2d');
+  const ps=[];
+  function rs(){c.width=window.innerWidth;c.height=window.innerHeight}
+  window.addEventListener('resize',rs);rs();
+  for(let i=0;i<40;i++)ps.push({x:Math.random()*c.width,y:Math.random()*c.height,s:0.4+Math.random()*1.6,v:0.2+Math.random()*0.7,o:Math.random()});
+  (function anim(){
+    if(el('title').classList.contains('fade'))return;
+    requestAnimationFrame(anim);
+    g.clearRect(0,0,c.width,c.height);
+    for(const p of ps){
+      p.y-=p.v;p.x+=Math.sin(p.y/40)*0.3;
+      if(p.y<-10){p.y=c.height+10;p.x=Math.random()*c.width}
+      g.globalAlpha=0.25+Math.sin(performance.now()/500+p.o*7)*0.2;
+      g.fillStyle='#e8a33d';
+      g.beginPath();g.arc(p.x,p.y,p.s,0,7);g.fill();
+    }
+    g.globalAlpha=1;
+  })();
+}
+emberAnim();
+loadGame();
+el('enterBtn').onclick=()=>{
+  const v=el('nameInput').value.trim().slice(0,14);
+  if(v)player.name=v;
+  if(!player.inv.length)starterKit();
+  // deterministic tunic color from name
+  const hue=hashStr(player.name)%360;
+  player.col='hsl('+hue+',48%,58%)';
+  el('title').classList.add('fade');
+  el('hud').classList.remove('hidden');
+  el('hint').classList.remove('hidden');
+  setTimeout(()=>el('hint').classList.add('hidden'),9000);
+  started=true;lastT=performance.now();
+  cam.x=clamp(player.x-VW/2,0,TW*TILE-VW);
+  cam.y=clamp(player.y-VH/2,0,TH*TILE-VH);
+  refreshPanel();
+  sysMsg('You arrive in Emberwick as the light fades. Click the ground to walk.');
+  if(!localStorage.getItem(SAVE_KEY))sysMsg('Maera, Doran and Brinn all need a hand. Rennick buys whatever you haul in.');
+  netStart();
+  saveGame();
+  ac();
+};
+el('nameInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter')el('enterBtn').click();
+  e.stopPropagation();
+});
+window.addEventListener('beforeunload',()=>{saveGame();netBye()});
+</script>
+</body>
+</html>
